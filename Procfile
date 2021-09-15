@@ -1,1 +1,1 @@
-worker: python3 bot.py
+heroku stack:set container
