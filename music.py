@@ -162,8 +162,11 @@ class MusicBot(commands.Cog):
     @commands.command()
     async def skip(self, context):
         if self.voice_channel != "":
-            self.voice_channel.stop()
-            await self.play_music(0)
+            if len(self.music_queue) >= 0:
+                self.voice_channel.stop()
+                await self.play_music(0)
+            else:
+                await context.send("Tem música o suficiente pra isso não. Da um queue antes aí.")
 
     
     @commands.command()
