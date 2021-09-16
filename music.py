@@ -37,6 +37,8 @@ class MusicBot(commands.Cog):
 
         #[song, channel]
         self.music_queue = []
+
+        #aqui é pra testar a lista de músicas cheia :)
         # for i in range(64):
         #     example = {}
         #     example["title"] = f"musica de numero {i+1}"
@@ -63,12 +65,21 @@ class MusicBot(commands.Cog):
 
 
     def find_url_youtube(self, url):
+        """
+            Baixa pela url (ou nome da musica) o audio da musica
+
+            param url: url ou nome da musica
+
+            :return: dicionário com todas as informações importantes da música
+        """
+
         with youtube_dl.YoutubeDL(self.YDL_OPTIONS) as ydl:
             try:
                 info = ydl.extract_info("ytsearch:%s" % url, download=False)["entries"][0]
             except Exception:
                 return False
 
+            #algumas músicas não possuem essas info. try/catch pra nao floodar esse erro nos logs
             try:
                 info_track = info["track"]
                 info_artist = info["artist"]
@@ -86,12 +97,17 @@ class MusicBot(commands.Cog):
 
 
     def play_next(self):
+        """
+            Toca a próxima música da lista de músicas
+        """
+
         if len(self.music_queue) > 0:
             self.is_playing = True
 
             first_url = self.music_queue[0][0]["source"]
             self.now_playing = self.music_queue[0][0]
             
+            #exclui a musica da lista
             self.music_queue.pop(0)
 
             #after: quando terminar de tocar, vai chamar novamente a funcao play_next
@@ -101,6 +117,10 @@ class MusicBot(commands.Cog):
 
 
     async def play_music(self, music_n):
+        """
+            Toca a primeira música, ou força a execução de outra (pelo skip)
+        """
+
         if len(self.music_queue) > 0:
             self.is_playing = True
 
@@ -114,6 +134,7 @@ class MusicBot(commands.Cog):
 
             self.now_playing = self.music_queue[0][0]
             
+            #exclui a musica da lista
             self.music_queue.pop(music_n)
             
             #after: quando terminar de tocar, vai chamar novamente a funcao play_next
@@ -124,6 +145,10 @@ class MusicBot(commands.Cog):
 
     @commands.command()
     async def help(self, context):
+        """
+            Lista como usar os comandos
+        """
+
         embed = discord.Embed(
             title="Como usar essa bagaça",
             description="Comandos atualmente funcionais:",
@@ -148,6 +173,10 @@ class MusicBot(commands.Cog):
 
     @commands.command()
     async def p(self, context, *args):
+        """
+            !p: dar play em uma música
+        """
+
         query = " ".join(args)
 
         #salva o canal que o usuario esta
@@ -157,6 +186,7 @@ class MusicBot(commands.Cog):
             await context.send("Você precisa ta num canal, lerdão. Vai escutar como?")
         else:
             song = self.find_url_youtube(query)
+            #a função tem dois returns. Foi o jeito q pensei na hora. deve ter jeito  melhor
             if type(song) == type(True):
                 await context.send("Nao consegui achá :O.")
             else:
@@ -176,11 +206,16 @@ class MusicBot(commands.Cog):
     
     @commands.command()
     async def q(self, context):
+        """
+            !q: mostrar a lista de músicas dividida em paginas (10 musicas por pagina)
+        """
+
         retval = "```"
         all_music_pages = []
         for i in range(0, len(self.music_queue)):
             retval += f"{i + 1} - {self.music_queue[i][0]['title']} \n"
-
+            
+            #a cada 10 musicas, adiciona uma pagina de musicas
             if (i+1) % 10 == 0 and i != 0:
                 retval += "```"
                 all_music_pages.append(retval)
@@ -201,7 +236,7 @@ class MusicBot(commands.Cog):
         prev_page = cur_page
         message = await context.send(f"Página {cur_page}/{pages}:\n{all_music_pages[cur_page-1]}")
         
-        #getting the message object for editing and reacting
+        #coloca as reações após as musicas
         await message.add_reaction("⏮")
         await message.add_reaction("◀️")
         await message.add_reaction("▶️")
@@ -209,13 +244,16 @@ class MusicBot(commands.Cog):
         
 
         def check(reaction, user):
-            #this makes sure nobody except the command sender can interact with the "menu"
+            """
+            Ter a certeza de que as reações que o bot colocou que serão processadas
+            """
+
             return user == context.author and str(reaction.emoji) in ["◀️", "▶️", "⏮", "⏭"]
 
         while True:
             try:
                 prev_page = cur_page
-                # waiting for a reaction to be added - times out after 20 seconds
+                #espera por 20 segundos (timeout) até receber alguma reação. apaga a mensagem se nao houver
                 reaction, user = await self.bot.wait_for("reaction_add", timeout=20, check=check)
 
                 if str(reaction.emoji) == "▶️" and cur_page != pages:
@@ -227,22 +265,26 @@ class MusicBot(commands.Cog):
                 elif str(reaction.emoji) == "⏮" and cur_page > 1:
                     cur_page = 1
                 else:
-                    #removes reactions if the user tries to go forward on the last page or
-                    #backwards on the first page
+                    #remove reação se estiver na ultima/primeira posicao e a pessoa tentar forçar
                     await message.remove_reaction(reaction, user)
 
+                #atualiza a página (mensagem)
                 if prev_page != cur_page:
                     await message.edit(content=f"Página {cur_page}/{pages}:\n{all_music_pages[cur_page-1]}")
                     await message.remove_reaction(reaction, user)
 
             except asyncio.TimeoutError:
                 await message.delete()
-                #ending the loop if user doesn't react after x seconds
+                #acaba com o loop após o timeout
                 break
 
     
     @commands.command()
     async def skip(self, context):
+        """
+        !skip: pula pra próxima música
+        """
+    
         if self.voice_channel != "":
             if len(self.music_queue) >= 0:
                 self.voice_channel.stop()
@@ -253,6 +295,10 @@ class MusicBot(commands.Cog):
     
     @commands.command()
     async def skipto(self, context, *args):
+        """
+        !skipto: pula pra uma música específica
+        """
+
         music_n = " ".join(args)
         if self.voice_channel != "":
             if len(self.music_queue) >= int(music_n):
@@ -264,6 +310,9 @@ class MusicBot(commands.Cog):
     
     @commands.command()
     async def pause(self, context):
+        """
+        !pause: pausa a musica
+        """
         if self.is_playing:
             self.voice_channel.pause()
             self.is_playing = False
@@ -271,6 +320,10 @@ class MusicBot(commands.Cog):
 
     @commands.command()
     async def resume(self, context):
+        """
+        !resume: continua a musica pausada
+        """
+
         if not self.is_playing:
             self.voice_channel.resume()
             self.is_playing = True
@@ -278,6 +331,10 @@ class MusicBot(commands.Cog):
 
     @commands.command()
     async def dc(self, context):
+        """
+        !dc: desconecta o bot da sala
+        """
+    
         if context.author.voice is None:
             await context.send("Cê nem ta no canal. Quer expulsar o bot pq, cusão?")
             return
@@ -289,6 +346,10 @@ class MusicBot(commands.Cog):
 
     @commands.command()
     async def lyrics(self, context, *args):
+        """
+        !lyrics: mostra a letra da musica atual ou de uma especifica
+        """
+
         music_info = ":".join(args).replace(":", " ").split("#")
 
         if len(music_info) == 2:
@@ -321,16 +382,24 @@ class MusicBot(commands.Cog):
 
     @commands.command()
     async def clear(self, context):
+        """
+        !clear: limpa a lista de musicas
+        """
         self.music_queue = []
 
     
     @commands.command()
     async def remove(self, context, *args):
+        """
+        !remove: mostra a letra da musica atual ou de uma especifica
+        """
+
         music_n = int(" ".join(args))
         if context.author.voice is None:
             await context.send("Cê nem ta no canal. Quer excluir a música pq?")
             return
 
+        #verifica se está em algum canal de voz
         if self.voice_channel != "":
             if len(self.music_queue) >= music_n:
                 self.music_queue.pop(music_n - 1)
