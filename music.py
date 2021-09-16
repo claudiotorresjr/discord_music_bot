@@ -35,6 +35,8 @@ class MusicBot(commands.Cog):
 
         self.is_playing = False
 
+        self.skiping = False
+
         #[song, channel]
         self.music_queue = []
 
@@ -101,7 +103,7 @@ class MusicBot(commands.Cog):
             Toca a próxima música da lista de músicas
         """
 
-        if len(self.music_queue) > 0:
+        if len(self.music_queue) > 0 and not self.skiping:
             self.is_playing = True
 
             first_url = self.music_queue[0][0]["source"]
@@ -114,6 +116,7 @@ class MusicBot(commands.Cog):
             self.voice_channel.play(discord.FFmpegPCMAudio(first_url, **self.FFMPEG_OPTIONS), after=lambda e: self.play_next())
         else:
             self.is_playing = False
+            self.skiping = False
 
 
     async def play_music(self, music_n):
@@ -288,6 +291,7 @@ class MusicBot(commands.Cog):
         if self.voice_channel != "":
             if len(self.music_queue) >= 0:
                 self.voice_channel.stop()
+                self.skiping = True
                 await self.play_music(0)
             else:
                 await context.send("Tem música o suficiente pra isso não. Da um queue antes aí.")
@@ -303,6 +307,7 @@ class MusicBot(commands.Cog):
         if self.voice_channel != "":
             if len(self.music_queue) >= int(music_n):
                 self.voice_channel.stop()
+                self.skiping = True
                 await self.play_music(int(music_n) - 1)
             else:
                 await context.send("Tem música o suficiente pra isso não. Da um queue antes aí.")
