@@ -1,10 +1,12 @@
 import re
 import discord
 from discord.ext import commands
+import asyncio
 
 import youtube_dl
 
 class MusicBot(commands.Cog):
+
     pode_ser_alguem = {
         "pode_ser_funk": {
             "keys": [
@@ -35,6 +37,11 @@ class MusicBot(commands.Cog):
 
         #[song, channel]
         self.music_queue = []
+        # for i in range(64):
+        #     example = {}
+        #     example["title"] = f"musica de numero {i+1}"
+        #     self.music_queue.append([example, ""])
+
         self.now_playing = ""
         self.YDL_OPTIONS = {
             'format': 'bestaudio/best',
@@ -114,7 +121,31 @@ class MusicBot(commands.Cog):
         else:
             self.is_playing = False
 
+
+    @commands.command()
+    async def help(self, context):
+        embed = discord.Embed(
+            title="Como usar essa bagaça",
+            description="Comandos atualmente funcionais:",
+            colour=context.author.colour,
+        )
+
+        embed.add_field(name='!help', value='Isso aqui que cê ta vendo')
+        embed.add_field(name='!p <nome da musica>', value='Escutar a musiquinha que vc quer. Por enquanto não funfa playlist :(')
+        embed.add_field(name='!q', value='Mostra as músicas que estão em espera na fila')
+        embed.add_field(name='!skip', value='Pula pra próxima música')
+        embed.add_field(name='!skipto <numero>', value='Pula pra música desejada')
+        embed.add_field(name='!pause', value='Pausa a música atual (a próxima que não é, né)')
+        embed.add_field(name='!resume', value='Retorna do pause (me obrigaram a não usar unpause)')
+        embed.add_field(name='!dc', value='Chuta o bot do canal')
+        embed.add_field(name='!lyrics', value='Mostra a letra da música atual (porcamente ainda)')
+        embed.add_field(name='!lyrics <nome da musica#artista>', value='Mostra a letra da música desejada (porcamente ainda)')
+        embed.add_field(name='!clear', value='Limpa a lista de músicas')
+        embed.add_field(name='!remove <musica>', value='Remove a música (passa o índice, não o nome, porfa')
     
+        await context.send(embed=embed)
+
+
     @commands.command()
     async def p(self, context, *args):
         query = " ".join(args)
@@ -146,17 +177,68 @@ class MusicBot(commands.Cog):
     @commands.command()
     async def q(self, context):
         retval = "```"
-        
+        all_music_pages = []
         for i in range(0, len(self.music_queue)):
             retval += f"{i + 1} - {self.music_queue[i][0]['title']} \n"
+
+            if (i+1) % 10 == 0 and i != 0:
+                retval += "```"
+                all_music_pages.append(retval)
+
+                retval = "```"
 
         retval += "```"
         if "``````" in retval:
             retval = ""
         if retval != "":
-            await context.send(retval)
-        else:
+            all_music_pages.append(retval)
+        elif retval == "" and len(all_music_pages) == 0:
             await context.send("Tem nada aqui irmão")
+            return
+
+        pages = len(all_music_pages)
+        cur_page = 1
+        prev_page = cur_page
+        message = await context.send(f"Página {cur_page}/{pages}:\n{all_music_pages[cur_page-1]}")
+        
+        #getting the message object for editing and reacting
+        await message.add_reaction("⏮")
+        await message.add_reaction("◀️")
+        await message.add_reaction("▶️")
+        await message.add_reaction("⏭")
+        
+
+        def check(reaction, user):
+            #this makes sure nobody except the command sender can interact with the "menu"
+            return user == context.author and str(reaction.emoji) in ["◀️", "▶️", "⏮", "⏭"]
+
+        while True:
+            try:
+                prev_page = cur_page
+                # waiting for a reaction to be added - times out after 20 seconds
+                reaction, user = await self.bot.wait_for("reaction_add", timeout=20, check=check)
+
+                if str(reaction.emoji) == "▶️" and cur_page != pages:
+                    cur_page += 1
+                elif str(reaction.emoji) == "⏭" and cur_page != pages:
+                    cur_page = pages
+                elif str(reaction.emoji) == "◀️" and cur_page > 1:
+                    cur_page -= 1
+                elif str(reaction.emoji) == "⏮" and cur_page > 1:
+                    cur_page = 1
+                else:
+                    #removes reactions if the user tries to go forward on the last page or
+                    #backwards on the first page
+                    await message.remove_reaction(reaction, user)
+
+                if prev_page != cur_page:
+                    await message.edit(content=f"Página {cur_page}/{pages}:\n{all_music_pages[cur_page-1]}")
+                    await message.remove_reaction(reaction, user)
+
+            except asyncio.TimeoutError:
+                await message.delete()
+                #ending the loop if user doesn't react after x seconds
+                break
 
     
     @commands.command()
@@ -195,13 +277,14 @@ class MusicBot(commands.Cog):
     
 
     @commands.command()
-    async def stop(self, context):
+    async def dc(self, context):
         if context.author.voice is None:
             await context.send("Cê nem ta no canal. Quer expulsar o bot pq, cusão?")
             return
 
-        await context.send("Toino lá. Vlw Flws :3")
-        await context.voice_client.disconnect()
+        if self.voice_channel != "":
+            await context.send("Toino lá. Vlw Flws :3")
+            await context.voice_client.disconnect()
 
 
     @commands.command()
@@ -234,3 +317,20 @@ class MusicBot(commands.Cog):
         #embed.set_thumbnail(url=song["thumbnail"]["genius"])
         embed.set_author(name=music_artist)
         await context.send(embed=embed)
+
+
+    @commands.command()
+    async def clear(self, context):
+        self.music_queue = []
+
+    
+    @commands.command()
+    async def remove(self, context, *args):
+        music_n = int(" ".join(args))
+        if context.author.voice is None:
+            await context.send("Cê nem ta no canal. Quer excluir a música pq?")
+            return
+
+        if self.voice_channel != "":
+            if len(self.music_queue) >= music_n:
+                self.music_queue.pop(music_n - 1)
