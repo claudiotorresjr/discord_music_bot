@@ -4,8 +4,8 @@ from discord.ext import commands
 import asyncio
 
 import youtube_dl
+import lyricsgenius as lg
 
-bot_global = None
 
 class MusicBot(commands.Cog):
 
@@ -30,9 +30,11 @@ class MusicBot(commands.Cog):
         }
     }
 
-    def __init__(self, bot, genius):
+    def __init__(self, bot):
         self.bot = bot
-        self.genius = genius
+
+        self.genius_api_key = "KxJJBM-kYTWl3mQBB2LuPAU2WLDJyPqjL1IezfY3h7dke7s7v4F5N_3O4eV7AH66"
+        self.genius = lg.Genius(self.genius_api_key)
 
         self.is_playing = False
 
