@@ -2,6 +2,7 @@ import re
 import discord
 from discord.ext import commands
 import asyncio
+import datetime
 
 import youtube_dl
 import lyricsgenius as lg
@@ -40,7 +41,6 @@ class MusicBot(commands.Cog):
 
         self.skiping = False
 
-        #[song, channel]
         self.music_queue = []
 
         #aqui é pra testar a lista de músicas cheia :)
@@ -51,6 +51,7 @@ class MusicBot(commands.Cog):
 
         self.now_playing = ""
         self.YDL_OPTIONS = {
+            'writethumbnail': True,
             'format': 'bestaudio/best',
             'restrictfilenames': True,
             'noplaylist': True,
@@ -60,7 +61,15 @@ class MusicBot(commands.Cog):
             'quiet': True,
             'no_warnings': True,
             'default_search': 'auto',
-            'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
+            'source_address': '0.0.0.0', # bind to ipv4 since ipv6 addresses cause issues sometimes
+            'postprocessors': [
+                {
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192'
+                },
+                {'key': 'EmbedThumbnail'},
+            ]
         }
         self.FFMPEG_OPTIONS = {
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -75,7 +84,7 @@ class MusicBot(commands.Cog):
             await message.channel.send("Vo trabaiá hj não. Fica de boa aí")
 
 
-    def find_url_youtube(self, url):
+    def find_url_youtube(self, url, context):
         """
             Baixa pela url (ou nome da musica) o audio da musica
 
@@ -97,13 +106,17 @@ class MusicBot(commands.Cog):
             except Exception:
                 info_track = ""
                 info_artist = ""
-
+            
+        requested_by = context.author
         return {
             "source": info["formats"][0]["url"],
             "title": info["title"],
             "description": info["description"],
             "track": info_track.split("(Ao Vivo)")[0],
-            "artist": info_artist.split("FEAT.")[0]
+            "artist": info_artist.split("FEAT.")[0],
+            "requested_by": requested_by,
+            "thumbnail": info["thumbnail"],
+            "timestamp": datetime.datetime.utcnow()
         }
 
 
@@ -197,7 +210,7 @@ class MusicBot(commands.Cog):
         except AttributeError:
             await context.send("Você precisa ta num canal, lerdão. Vai escutar como?")
         else:
-            song = self.find_url_youtube(query)
+            song = self.find_url_youtube(query, context)
             #a função tem dois returns. Foi o jeito q pensei na hora. deve ter jeito  melhor
             if type(song) == type(True):
                 await context.send("Nao consegui achá :O.")
@@ -417,3 +430,34 @@ class MusicBot(commands.Cog):
         if self.voice_channel != "":
             if len(self.music_queue) >= music_n:
                 self.music_queue.pop(music_n - 1)
+
+
+    @commands.command()
+    async def np(self, context):
+        """
+        !np: musica tocando na hora
+        """
+
+        #verifica se está em algum canal de voz
+        if self.voice_channel != "":
+            embed = discord.Embed(
+                title="Tamovino agora:",
+                colour=context.author.colour,
+                timestamp=self.now_playing["timestamp"]
+            )
+
+            music_name = self.now_playing["title"]
+            requested_by = str(self.now_playing["requested_by"])
+            requested_by_display_name = self.now_playing["requested_by"].display_name
+            requested_by_avatar_url = self.now_playing["requested_by"].avatar_url
+            music_artist = self.now_playing["artist"]
+
+            embed.set_footer(
+                text=f"Pedida por: {requested_by_display_name} ({requested_by})",
+                icon_url=requested_by_avatar_url
+            )
+            embed.add_field(name="Título:", value=music_name, inline=False)
+            embed.add_field(name="Artista:", value=music_artist, inline=False)
+            embed.set_thumbnail(url=self.now_playing["thumbnail"])
+
+            await context.send(embed=embed)
