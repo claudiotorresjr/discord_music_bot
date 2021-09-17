@@ -4,6 +4,7 @@ import lyricsgenius as lg
 import argparse
 
 import music
+import games
 
 
 def get_arguments():
@@ -33,6 +34,7 @@ def main(test_env):
 
     my_bot = commands.Bot(command_prefix=prefix, help_command=None)
     my_bot.add_cog(music.MusicBot(my_bot, genius))
+    my_bot.add_cog(games.GamesBot(my_bot))
 
     my_bot.run(TOKEN)
 

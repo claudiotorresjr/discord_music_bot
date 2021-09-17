@@ -5,6 +5,8 @@ import asyncio
 
 import youtube_dl
 
+bot_global = None
+
 class MusicBot(commands.Cog):
 
     pode_ser_alguem = {
@@ -27,7 +29,6 @@ class MusicBot(commands.Cog):
             "frase": "Será que ta tudo bem com o Matheus? Deve ta chorando, tadinho :("
         }
     }
-
 
     def __init__(self, bot, genius):
         self.bot = bot
@@ -64,6 +65,12 @@ class MusicBot(commands.Cog):
             "options": "-vn"
         }
         self.voice_channel = ""
+
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if self.bot.user.mentioned_in(message):
+            await message.channel.send("Vo trabaiá hj não. Fica de boa aí")
 
 
     def find_url_youtube(self, url):
