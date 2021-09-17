@@ -200,6 +200,8 @@ class MusicBot(commands.Cog):
         embed.add_field(name='!lyrics <nome da musica#artista>', value='Mostra a letra da música desejada (porcamente ainda)')
         embed.add_field(name='!clear', value='Limpa a lista de músicas')
         embed.add_field(name='!remove <musica>', value='Remove a música (passa o índice, não o nome, porfa')
+        embed.add_field(name='!np', value='Mostra a música atual')
+        embed.add_field(name='!veia', value='Abre o jogo da velha (os dois players precisam dar o comando)')
     
         await context.send(embed=embed)
 
