@@ -64,13 +64,13 @@ class GamesBot(commands.Cog):
                 Ter a certeza de que as reações que o bot colocou que serão processadas
                 """
 
-                return user == context.author and str(reaction.emoji) in emojis
+                return str(user).split("#")[0] in self.tic_tac_toe_players and str(reaction.emoji) in emojis
 
 
             while True:
                 try:
                     #espera por 20 segundos (timeout) até receber alguma reação. apaga a mensagem se nao houver
-                    reaction, user = await self.bot.wait_for("reaction_add", timeout=10)
+                    reaction, user = await self.bot.wait_for("reaction_add", timeout=10, check=check)
                     
                     mark = ":o2:"
                     if not self.tic_tac_toe:
