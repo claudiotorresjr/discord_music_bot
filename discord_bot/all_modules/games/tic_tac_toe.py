@@ -7,9 +7,7 @@ class TicTacToeBot(commands.Cog):
     messages_tic = []
     tic_tac_toe = False
     tic_tac_toe_players = []
-    tic_tac_toe_board = [":white_large_square:", ":white_large_square:", ":white_large_square:",
-            ":white_large_square:", ":white_large_square:", ":white_large_square:",
-            ":white_large_square:", ":white_large_square:", ":white_large_square:"]
+    tic_tac_toe_board = []
 
 
     def __init__(self, bot):
@@ -28,6 +26,12 @@ class TicTacToeBot(commands.Cog):
                 description=f"{self.tic_tac_toe_players[0]} vs {self.tic_tac_toe_players[1]}",
                 color=discord.Color.blurple(),
             )
+
+            self.messages_tic = []
+            self.tic_tac_toe = False
+            self.tic_tac_toe_board = [":white_large_square:", ":white_large_square:", ":white_large_square:",
+            ":white_large_square:", ":white_large_square:", ":white_large_square:",
+            ":white_large_square:", ":white_large_square:", ":white_large_square:"]
 
             embed_message = await context.send(embed=embed)
             line = ""
@@ -53,7 +57,6 @@ class TicTacToeBot(commands.Cog):
             await self.messages_tic[len(self.messages_tic)-2].add_reaction("⬇️")
             await self.messages_tic[len(self.messages_tic)-2].add_reaction("↘️")
 
-
             emojis = [
                 "↖️", "⬆️", "↗️",
                 "⬅️","🔵", "➡️",
@@ -72,7 +75,7 @@ class TicTacToeBot(commands.Cog):
                     return True
 
                 #verifica as linhas verticais
-                if board[board_col][0] == board[board_col][1] == board[board_col][2]:
+                if board[board_line][0] == board[board_line][1] == board[board_line][2]:
                     return True
 
                 #verifica diagonal principal
@@ -92,11 +95,11 @@ class TicTacToeBot(commands.Cog):
 
                 return str(user).split("#")[0] in self.tic_tac_toe_players and str(reaction.emoji) in emojis
 
-
+            total_reactions = 0
             while True:
                 try:
                     #espera por 20 segundos (timeout) até receber alguma reação. apaga a mensagem se nao houver
-                    reaction, user = await self.bot.wait_for("reaction_add", timeout=10, check=check)
+                    reaction, user = await self.bot.wait_for("reaction_add", timeout=20, check=check)
                     
                     pos = 1
                     mark = ":o2:"
@@ -118,14 +121,16 @@ class TicTacToeBot(commands.Cog):
                         line += " " + self.tic_tac_toe_board[i]
 
                     board_col = emoji_index
-                    if emoji_index >= 3 :
+                    if emoji_index >= 3 and emoji_index < 6:
                         board_col = emoji_index - 3
+                    elif emoji_index >= 6:
+                        board_col = emoji_index - 6
 
                     board[board_line][board_col] = pos
-                    print(board[0][0] , board[0][1], board[0][2])
-                    print(board[1][0] , board[1][1], board[1][2])
-                    print(board[2][0] , board[2][1], board[2][2])
-                    print("-"*15)
+                    # print(board[0][0] , board[0][1], board[0][2])
+                    # print(board[1][0] , board[1][1], board[1][2])
+                    # print(board[2][0] , board[2][1], board[2][2])
+                    # print("-"*15)
 
                     await self.messages_tic[board_line].edit(content=line)
 
@@ -136,14 +141,31 @@ class TicTacToeBot(commands.Cog):
                         )
 
                         embed_message = await context.send(embed=embed)
+                        self.tic_tac_toe_players = []
+                        self.messages_tic = []
 
                         break
+                    
+                    total_reactions += 1
+                    if total_reactions == 9:
+                        embed = discord.Embed(
+                            title=f"Ninguém ganhô :(",
+                            color=discord.Color.blurple(),
+                        )
+
+                        embed_message = await context.send(embed=embed)
+                        self.tic_tac_toe_players = []
+                        self.messages_tic = []
+
+                        break
+
 
                 except asyncio.TimeoutError:
                     for message in self.messages_tic:
                         await message.delete()
                     #acaba com o loop após o timeout
                     self.tic_tac_toe_players = []
+                    self.messages_tic = []
                     break
 
 
