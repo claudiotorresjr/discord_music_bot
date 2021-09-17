@@ -102,10 +102,18 @@ class MusicBot(commands.Cog):
             #algumas músicas não possuem essas info. try/catch pra nao floodar esse erro nos logs
             try:
                 info_track = info["track"]
+            except Exception:
+                info_track = "sem info"
+            try:
                 info_artist = info["artist"]
             except Exception:
-                info_track = ""
-                info_artist = ""
+                info_artist = "sem info"
+
+            try:
+                thumb = info["thumbnail"]
+            except Exception:
+                thumb = None
+
             
         requested_by = context.author
         return {
@@ -115,7 +123,7 @@ class MusicBot(commands.Cog):
             "track": info_track.split("(Ao Vivo)")[0],
             "artist": info_artist.split("FEAT.")[0],
             "requested_by": requested_by,
-            "thumbnail": info["thumbnail"],
+            "thumbnail": thumb,
             "timestamp": datetime.datetime.utcnow()
         }
 
@@ -237,13 +245,31 @@ class MusicBot(commands.Cog):
 
         retval = "```"
         all_music_pages = []
+        embed = discord.Embed(
+            title="Iremoví depois:"
+        )
         for i in range(0, len(self.music_queue)):
-            retval += f"{i + 1} - {self.music_queue[i][0]['title']} \n"
+            music_name = self.music_queue[i][0]["title"]
+            requested_by = str(self.music_queue[i][0]["requested_by"])
+            requested_by_display_name = self.music_queue[i][0]["requested_by"].display_name
+
+            timestamp = self.music_queue[i][0]['timestamp'].strftime('%H:%M')
+            embed.add_field(
+                name=f"{i + 1} - {music_name}",
+                value=f"{requested_by_display_name} ({requested_by}) • Hoje às {timestamp}",
+                inline=False)
+            
+            retval += f"{i} \n"
             
             #a cada 10 musicas, adiciona uma pagina de musicas
             if (i+1) % 10 == 0 and i != 0:
                 retval += "```"
-                all_music_pages.append(retval)
+                all_music_pages.append(embed)
+                
+                embed = discord.Embed(
+                    title="Iremoví depois:",
+                    #timestamp=self.now_playing["timestamp"]
+                )
 
                 retval = "```"
 
@@ -251,7 +277,7 @@ class MusicBot(commands.Cog):
         if "``````" in retval:
             retval = ""
         if retval != "":
-            all_music_pages.append(retval)
+            all_music_pages.append(embed)
         elif retval == "" and len(all_music_pages) == 0:
             await context.send("Tem nada aqui irmão")
             return
@@ -259,7 +285,7 @@ class MusicBot(commands.Cog):
         pages = len(all_music_pages)
         cur_page = 1
         prev_page = cur_page
-        message = await context.send(f"Página {cur_page}/{pages}:\n{all_music_pages[cur_page-1]}")
+        message = await context.send(embed=all_music_pages[cur_page-1])
         
         #coloca as reações após as musicas
         await message.add_reaction("⏮")
@@ -295,11 +321,14 @@ class MusicBot(commands.Cog):
 
                 #atualiza a página (mensagem)
                 if prev_page != cur_page:
-                    await message.edit(content=f"Página {cur_page}/{pages}:\n{all_music_pages[cur_page-1]}")
-                    await message.remove_reaction(reaction, user)
+                   await message.edit(embed=all_music_pages[cur_page-1])
+                   await message.remove_reaction(reaction, user)
 
             except asyncio.TimeoutError:
-                await message.delete()
+                try:
+                    await message.delete()
+                except Exception:
+                    pass
                 #acaba com o loop após o timeout
                 break
 
@@ -447,10 +476,11 @@ class MusicBot(commands.Cog):
             )
 
             music_name = self.now_playing["title"]
+            music_artist = self.now_playing["artist"]
+
             requested_by = str(self.now_playing["requested_by"])
             requested_by_display_name = self.now_playing["requested_by"].display_name
             requested_by_avatar_url = self.now_playing["requested_by"].avatar_url
-            music_artist = self.now_playing["artist"]
 
             embed.set_footer(
                 text=f"Pedida por: {requested_by_display_name} ({requested_by})",
@@ -458,6 +488,10 @@ class MusicBot(commands.Cog):
             )
             embed.add_field(name="Título:", value=music_name, inline=False)
             embed.add_field(name="Artista:", value=music_artist, inline=False)
-            embed.set_thumbnail(url=self.now_playing["thumbnail"])
+
+            try:
+                embed.set_thumbnail(url=self.now_playing["thumbnail"])
+            except discord.errors.HTTPException:
+                pass
 
             await context.send(embed=embed)
