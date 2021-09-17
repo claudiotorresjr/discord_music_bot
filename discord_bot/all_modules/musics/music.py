@@ -124,6 +124,7 @@ class MusicBot(commands.Cog):
             "artist": info_artist.split("FEAT.")[0],
             "requested_by": requested_by,
             "thumbnail": thumb,
+            "video_url": f"https://www.youtube.com/watch?v={info['webpage_url_basename']}",
             "timestamp": datetime.datetime.utcnow()
         }
 
@@ -488,7 +489,7 @@ class MusicBot(commands.Cog):
                 text=f"Pedida por: {requested_by_display_name} ({requested_by})",
                 icon_url=requested_by_avatar_url
             )
-            embed.add_field(name="Título:", value=music_name, inline=False)
+            embed.add_field(name="Título:", value=f"[{music_name}]({self.now_playing['video_url']})", inline=False)
             embed.add_field(name="Artista:", value=music_artist, inline=False)
 
             try:
