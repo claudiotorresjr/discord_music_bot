@@ -3,10 +3,12 @@ import discord
 from discord.ext import commands
 import asyncio
 import datetime
+import threading
+import time
 
 import youtube_dl
 import lyricsgenius as lg
-
+    
 
 class MusicBot(commands.Cog):
 
@@ -38,6 +40,7 @@ class MusicBot(commands.Cog):
         self.genius = lg.Genius(self.genius_api_key)
 
         self.is_playing = False
+        self.music_atual_time = ""
 
         self.skiping = False
 
@@ -76,12 +79,36 @@ class MusicBot(commands.Cog):
             "options": "-vn"
         }
         self.voice_channel = ""
+        self.thread = ""
+        self.music_stop_counter = False
 
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if self.bot.user.mentioned_in(message):
             await message.channel.send("Vo trabaiá hj não. Fica de boa aí")
+
+
+    def music_time_counter(self, video_duration):
+
+        time_start = time.time()
+        seconds = 0
+        minutes = 0
+
+        self.music_atual_time = 0
+        self.music_stop_counter = False
+
+        while self.music_atual_time <= video_duration and (self.voice_channel.is_playing() or self.voice_channel.is_paused()):
+            if not self.voice_channel.is_paused():
+                #print(f"{minutes}:{seconds}")
+                time.sleep(1)
+                self.music_atual_time += 1
+                seconds = int(time.time() - time_start) - minutes * 60
+                if seconds >= 60:
+                    minutes += 1
+                    seconds = 0
+
+        self.music_stop_counter = True
 
 
     def find_url_youtube(self, url, context):
@@ -96,6 +123,7 @@ class MusicBot(commands.Cog):
         with youtube_dl.YoutubeDL(self.YDL_OPTIONS) as ydl:
             try:
                 info = ydl.extract_info("ytsearch:%s" % url, download=False)["entries"][0]
+
             except Exception:
                 return False
 
@@ -114,6 +142,7 @@ class MusicBot(commands.Cog):
             except Exception:
                 thumb = None
 
+        #print(info["video_length"])
             
         requested_by = context.author
         return {
@@ -125,6 +154,7 @@ class MusicBot(commands.Cog):
             "requested_by": requested_by,
             "thumbnail": thumb,
             "video_url": f"https://www.youtube.com/watch?v={info['webpage_url_basename']}",
+            "video_duration": info["duration"],
             "timestamp": datetime.datetime.utcnow()
         }
 
@@ -134,7 +164,14 @@ class MusicBot(commands.Cog):
             Toca a próxima música da lista de músicas
         """
 
+        try:
+            self.thread.join()
+        except Exception:
+            pass
+
         if len(self.music_queue) > 0 and not self.skiping:
+
+            self.start_time = 0
             self.is_playing = True
 
             first_url = self.music_queue[0][0]["source"]
@@ -145,6 +182,10 @@ class MusicBot(commands.Cog):
 
             #after: quando terminar de tocar, vai chamar novamente a funcao play_next
             self.voice_channel.play(discord.FFmpegPCMAudio(first_url, **self.FFMPEG_OPTIONS), after=lambda e: self.play_next())
+        
+            if self.voice_channel.is_playing() or self.voice_channel.is_paused():
+                self.thread = threading.Thread(target = self.music_time_counter, args = (self.now_playing["video_duration"], ))
+                self.thread.start()
         else:
             self.is_playing = False
             self.skiping = False
@@ -155,7 +196,15 @@ class MusicBot(commands.Cog):
             Toca a primeira música, ou força a execução de outra (pelo skip)
         """
 
+        try:
+            self.thread.join()
+        except Exception:
+            pass
+
         if len(self.music_queue) > 0:
+
+            self.start_time = 0
+
             self.is_playing = True
 
             first_url = self.music_queue[music_n][0]["source"]
@@ -166,13 +215,18 @@ class MusicBot(commands.Cog):
             else:
                 await self.voice_channel.move_to(self.music_queue[music_n][1])
 
-            self.now_playing = self.music_queue[0][0]
+            self.now_playing = self.music_queue[music_n][0]
             
             #exclui a musica da lista
             self.music_queue.pop(music_n)
             
             #after: quando terminar de tocar, vai chamar novamente a funcao play_next
             self.voice_channel.play(discord.FFmpegPCMAudio(first_url, **self.FFMPEG_OPTIONS), after=lambda e: self.play_next())
+            
+            if self.voice_channel.is_playing() or self.voice_channel.is_paused():
+                self.thread = threading.Thread(target = self.music_time_counter, args = (self.now_playing["video_duration"], ))
+                self.thread.start()
+
         else:
             self.is_playing = False
 
@@ -347,6 +401,7 @@ class MusicBot(commands.Cog):
                 self.voice_channel.stop()
                 self.skiping = True
                 await self.play_music(0)
+                self.music_stop_counter = True
             else:
                 await context.send("Tem música o suficiente pra isso não. Da um queue antes aí.")
 
@@ -363,6 +418,7 @@ class MusicBot(commands.Cog):
                 self.voice_channel.stop()
                 self.skiping = True
                 await self.play_music(int(music_n) - 1)
+                self.music_stop_counter = True
             else:
                 await context.send("Tem música o suficiente pra isso não. Da um queue antes aí.")
 
@@ -470,6 +526,8 @@ class MusicBot(commands.Cog):
         !np: musica tocando na hora
         """
 
+        message = ""
+
         #verifica se está em algum canal de voz
         if self.voice_channel != "":
             embed = discord.Embed(
@@ -485,16 +543,73 @@ class MusicBot(commands.Cog):
             requested_by_display_name = self.now_playing["requested_by"].display_name
             requested_by_avatar_url = self.now_playing["requested_by"].avatar_url
 
+            current_time = divmod(self.music_atual_time, 60)
+            music_duration = divmod(self.now_playing["video_duration"], 60)
+
+            show_time = f"{int(current_time[0])}:{round(current_time[1]):02}/{int(music_duration[0])}:{round(music_duration[1]):02}"
+
             embed.set_footer(
                 text=f"Pedida por: {requested_by_display_name} ({requested_by})",
                 icon_url=requested_by_avatar_url
             )
             embed.add_field(name="Título:", value=f"[{music_name}]({self.now_playing['video_url']})", inline=False)
             embed.add_field(name="Artista:", value=music_artist, inline=False)
+            embed.add_field(name="Duração:", value=f"{show_time}", inline=False)
 
             try:
                 embed.set_thumbnail(url=self.now_playing["thumbnail"])
             except discord.errors.HTTPException:
                 pass
 
-            await context.send(embed=embed)
+            message = await context.send(embed=embed)
+
+            # while not self.music_stop_counter:
+            #     time.sleep(1)
+            #     current_time = divmod(self.music_atual_time, 60)
+            #     show_time = f"{int(current_time[0])}:{round(current_time[1]):02}/{int(music_duration[0])}:{round(music_duration[1]):02}"
+            #     current_time = divmod(self.music_atual_time, 60)
+            #     music_duration = divmod(self.now_playing["video_duration"], 60)
+
+            #     show_time = f"{int(current_time[0])}:{round(current_time[1]):02}/{int(music_duration[0])}:{round(music_duration[1]):02}"
+
+            #     new_embed = discord.Embed(
+            #         title="Tamovino agora:",
+            #         colour=context.author.colour,
+            #         timestamp=self.now_playing["timestamp"]
+            #     )
+            #     new_embed.set_footer(
+            #         text=f"Pedida por: {requested_by_display_name} ({requested_by})",
+            #         icon_url=requested_by_avatar_url
+            #     )
+            #     new_embed.add_field(name="Título:", value=f"[{music_name}]({self.now_playing['video_url']})", inline=False)
+            #     new_embed.add_field(name="Artista:", value=music_artist, inline=False)
+            #     new_embed.add_field(name="Duração:", value=f"{show_time}", inline=False)
+
+            #     try:
+            #         new_embed.set_thumbnail(url=self.now_playing["thumbnail"])
+            #     except discord.errors.HTTPException:
+            #         pass
+
+            #     await message.edit(embed=new_embed)
+
+            # print("terminou uma")
+
+
+    
+    # @commands.command()
+    # async def pos(self, context):
+    #     """
+    #     !pos:
+    #     """
+
+    #     current_time = divmod(self.music_atual_time, 60)
+    #     music_duration = divmod(self.now_playing["video_duration"], 60)
+
+    #     show_time = f"{int(current_time[0])}:{round(current_time[1]):02}/{int(music_duration[0])}:{round(music_duration[1]):02}"
+
+    #     message = await context.send(show_time)
+    #     while True:
+    #         time.sleep(1)
+    #         current_time = divmod(self.music_atual_time, 60)
+    #         show_time = f"{int(current_time[0])}:{round(current_time[1]):02}/{int(music_duration[0])}:{round(music_duration[1]):02}"
+    #         await message.edit(content=show_time)
