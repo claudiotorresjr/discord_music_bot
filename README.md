@@ -1,3 +1,11 @@
+## Gerando novos módulos
+
+O código da import automático nos módulos presentes dentro do diretório ```all_modules/```
+
+Basta adicionar outro diretório ou outro módulo dentro dos diretórios existentes
+
+TODO: conferir se o módulo é "importável". Caso um módulo não seja, vai dar pau
+
 ## Usando o Dockerfile
 
 1 - Criar a imagem docker pelo Dockerfile
