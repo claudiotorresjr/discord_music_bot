@@ -6,7 +6,7 @@ import initializer
 
 def get_arguments():
     """
-    Get command line arguments
+        Get command line arguments
     """
 
     parser = argparse.ArgumentParser()
@@ -19,6 +19,12 @@ def get_arguments():
 
 
 def main(test_env):
+    """
+        Função principal que inicializa o bot e todas as suas funções
+
+        param test_env: flag que indica se estamos em um ambiente de testes
+    """
+
     initializer.Initializer(test_env)
 
 

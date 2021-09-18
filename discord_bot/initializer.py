@@ -7,16 +7,21 @@ from discord.ext import commands
 
 
 class Initializer(object):
-    def __init__(self, test_env):
-        self.prefix = "!"
-        self.TOKEN = "ODg3NTE4NDYyMzk2NzQzNzEy.YUFT-g.ESw2uCJIcFNw1HtiJ9OhKhgJXfE"
+    """
+        Classe base para a criação do bot e para importar e instanciar todas as classes necessárias
+    """
 
+    prefix = "!"
+    TOKEN = "ODg3NTE4NDYyMzk2NzQzNzEy.YUFT-g.ESw2uCJIcFNw1HtiJ9OhKhgJXfE"
+
+    def __init__(self, test_env):
         if test_env:
             self.prefix = "#"
             self.TOKEN = "ODg4MDU3ODcxNjg4OTQxNTk4.YUNKVw.a7CELQe1QMeI7-e3CcVwlYNtrXo"
 
         self.my_bot = commands.Bot(command_prefix=self.prefix, help_command=None)
 
+        #para cada diretorio em discord_bot/all_modules, importa os módulos presentes
         for dir in os.listdir("discord_bot/all_modules"):
             self.import_modules_from_dir(f"all_modules.{dir}")
 
@@ -25,9 +30,9 @@ class Initializer(object):
 
     def import_modules_from_dir(self, dir_name):
         """
-            Import all games modules inside all_games directory and instantiate it. 
+            Importa todos os módulos presentes em dir_name
 
-        :   param string dir_name: directory to import modules from
+            param dir_name: diretório qeue possui os módulos para serem importados
 
         """
 

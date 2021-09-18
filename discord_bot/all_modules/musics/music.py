@@ -3,14 +3,19 @@ import discord
 from discord.ext import commands
 import asyncio
 import datetime
-import threading
 import time
 
 import youtube_dl
 import lyricsgenius as lg
-    
+
+#from discord_bot import all_modules
+from all_modules import musics
+
 
 class MusicBot(commands.Cog):
+    """
+        Classe base para os comandos relacionados ao bot de música
+    """
 
     pode_ser_alguem = {
         "pode_ser_funk": {
@@ -33,18 +38,20 @@ class MusicBot(commands.Cog):
         }
     }
 
-    def __init__(self, bot):
-        self.bot = bot
 
-        self.genius_api_key = "KxJJBM-kYTWl3mQBB2LuPAU2WLDJyPqjL1IezfY3h7dke7s7v4F5N_3O4eV7AH66"
-        self.genius = lg.Genius(self.genius_api_key)
+    def __init__(self, bot):
+        """
+            __init__
+        """
+
+        self.bot = bot
 
         self.is_playing = False
         self.music_atual_time = ""
-
         self.skiping = False
-
         self.music_queue = []
+
+        self.np_is_running = False
 
         #aqui é pra testar a lista de músicas cheia :)
         # for i in range(64):
@@ -53,6 +60,14 @@ class MusicBot(commands.Cog):
         #     self.music_queue.append([example, ""])
 
         self.now_playing = ""
+        self.voice_channel = ""
+        self.thread = ""
+        self.music_stop_counter = False
+
+        self.genius_api_key = "KxJJBM-kYTWl3mQBB2LuPAU2WLDJyPqjL1IezfY3h7dke7s7v4F5N_3O4eV7AH66"
+        self.genius = lg.Genius(self.genius_api_key)
+
+        #configurações do modulo youtube_dl
         self.YDL_OPTIONS = {
             'writethumbnail': True,
             'format': 'bestaudio/best',
@@ -64,7 +79,7 @@ class MusicBot(commands.Cog):
             'quiet': True,
             'no_warnings': True,
             'default_search': 'auto',
-            'source_address': '0.0.0.0', # bind to ipv4 since ipv6 addresses cause issues sometimes
+            'source_address': '0.0.0.0', #ipv4 pois ipv6 causa erro as vezes
             'postprocessors': [
                 {
                     'key': 'FFmpegExtractAudio',
@@ -74,40 +89,34 @@ class MusicBot(commands.Cog):
                 {'key': 'EmbedThumbnail'},
             ]
         }
+        #configurações do ffmpeg (relacionadas ao áudio que será gerado)
         self.FFMPEG_OPTIONS = {
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
             "options": "-vn"
         }
-        self.voice_channel = ""
-        self.thread = ""
-        self.music_stop_counter = False
+        self.voice_source = ""
 
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        """
+            É ativada sempre que alguma mensagem é enviada no servidor
+
+            param message: mensagem enviada
+        """
+
+        #verifica se o bot foi marcado e manda uma resposta
         if self.bot.user.mentioned_in(message):
             await message.channel.send("Vo trabaiá hj não. Fica de boa aí")
 
 
-    def music_time_counter(self, video_duration):
-
-        time_start = time.time()
-        seconds = 0
-        minutes = 0
-
-        self.music_atual_time = 0
-
-        while self.music_atual_time <= video_duration and (self.voice_channel.is_playing() or self.voice_channel.is_paused()):
-            if not self.voice_channel.is_paused():
-                #print(f"{minutes}:{seconds}")
-                time.sleep(1)
-                self.music_atual_time += 1
-                seconds = int(time.time() - time_start) - minutes * 60
-                if seconds >= 60:
-                    minutes += 1
-                    seconds = 0
-
-        self.music_stop_counter = True
+    def get_music_progress(self):
+        if self.voice_source:
+            return self.voice_source.music_progress
+            #TODO: Properly implement this
+            #       Correct calculation should be bytes_read/192k
+            #       192k AKA sampleRate * (bitDepth / 8) * channelCount
+            #       Change frame_count to bytes_read in the PatchedBuff
 
 
     def find_url_youtube(self, url, context):
@@ -115,14 +124,14 @@ class MusicBot(commands.Cog):
             Baixa pela url (ou nome da musica) o audio da musica
 
             param url: url ou nome da musica
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
 
-            :return: dicionário com todas as informações importantes da música
+            :return: dicionário com todas as informações relevantes da música
         """
 
         with youtube_dl.YoutubeDL(self.YDL_OPTIONS) as ydl:
             try:
                 info = ydl.extract_info("ytsearch:%s" % url, download=False)["entries"][0]
-
             except Exception:
                 return False
 
@@ -135,25 +144,24 @@ class MusicBot(commands.Cog):
                 info_artist = info["artist"]
             except Exception:
                 info_artist = "sem info"
-
             try:
                 thumb = info["thumbnail"]
             except Exception:
                 thumb = None
 
-        #print(info["video_length"])
-            
-        requested_by = context.author
         return {
             "source": info["formats"][0]["url"],
             "title": info["title"],
             "description": info["description"],
+            # porcamente tira o (Ao Vivo) para facilitar encontrar a letra
             "track": info_track.split("(Ao Vivo)")[0],
+            # porcamente tira o FEAT. para facilitar encontrar a letra
             "artist": info_artist.split("FEAT.")[0],
-            "requested_by": requested_by,
+            "requested_by": context.author,
             "thumbnail": thumb,
             "video_url": f"https://www.youtube.com/watch?v={info['webpage_url_basename']}",
             "video_duration": info["duration"],
+            # guardar o horário que a música foi pedida
             "timestamp": datetime.datetime.utcnow()
         }
 
@@ -163,16 +171,20 @@ class MusicBot(commands.Cog):
             Toca a próxima música da lista de músicas
         """
 
-        try:
-            self.thread.join()
-        except Exception:
-            pass
+        #TODO: arrumar a thread
+        #try:
+        #    self.thread.join()
+        #except Exception:
+        #    pass
 
         if len(self.music_queue) > 0 and not self.skiping:
+            self.np_is_running = False
+            #sempre que uma música iniciar, para a atualização de qualquer card do comando !np
             self.music_stop_counter = True
+            self.music_atual_time = 0
 
             self.start_time = 0
-            self.is_playing = True
+            self.is_playing = True            
 
             first_url = self.music_queue[0][0]["source"]
             self.now_playing = self.music_queue[0][0]
@@ -180,12 +192,15 @@ class MusicBot(commands.Cog):
             #exclui a musica da lista
             self.music_queue.pop(0)
 
+            self.voice_source = musics.SourcePlaybackCounter(discord.FFmpegPCMAudio(first_url, **self.FFMPEG_OPTIONS), int(self.now_playing["video_duration"]))
+            #da o play na música
             #after: quando terminar de tocar, vai chamar novamente a funcao play_next
-            self.voice_channel.play(discord.FFmpegPCMAudio(first_url, **self.FFMPEG_OPTIONS), after=lambda e: self.play_next())
-        
-            if self.voice_channel.is_playing() or self.voice_channel.is_paused():
-                self.thread = threading.Thread(target = self.music_time_counter, args = (self.now_playing["video_duration"], ))
-                self.thread.start()
+            self.voice_channel.play(
+                self.voice_source.voice_source,
+                after=lambda e: self.play_next()
+            )
+            self.voice_source.is_source_playing = True
+            self.voice_source.is_source_paused = False
         else:
             self.is_playing = False
             self.skiping = False
@@ -194,16 +209,20 @@ class MusicBot(commands.Cog):
     async def play_music(self, music_n):
         """
             Toca a primeira música, ou força a execução de outra (pelo skip)
+
+            param music_n: índice da música escolhida para o skip (ou 0, caso seja a primeira)
         """
 
-        try:
-            self.thread.join()
-        except Exception:
-            pass
+        #TODO: arrumar a thread
+        # try:
+        #     self.thread.join()
+        # except Exception:
+        #     pass
 
         if len(self.music_queue) > 0:
-
+            self.np_is_running = False
             self.start_time = 0
+            self.music_atual_time = 0
 
             self.is_playing = True
 
@@ -220,13 +239,15 @@ class MusicBot(commands.Cog):
             #exclui a musica da lista
             self.music_queue.pop(music_n)
             
+            self.voice_source = musics.SourcePlaybackCounter(discord.FFmpegPCMAudio(first_url, **self.FFMPEG_OPTIONS), int(self.now_playing["video_duration"]))
+            #da o play na música
             #after: quando terminar de tocar, vai chamar novamente a funcao play_next
-            self.voice_channel.play(discord.FFmpegPCMAudio(first_url, **self.FFMPEG_OPTIONS), after=lambda e: self.play_next())
-            
-            if self.voice_channel.is_playing() or self.voice_channel.is_paused():
-                self.thread = threading.Thread(target = self.music_time_counter, args = (self.now_playing["video_duration"], ))
-                self.thread.start()
-
+            self.voice_channel.play(
+                self.voice_source.voice_source,
+                after=lambda e: self.play_next()
+            )
+            self.voice_source.is_source_playing = True
+            self.voice_source.is_source_paused = False
         else:
             self.is_playing = False
 
@@ -234,7 +255,9 @@ class MusicBot(commands.Cog):
     @commands.command()
     async def help(self, context):
         """
-            Lista como usar os comandos
+            !help: Lista como usar os comandos
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
 
         embed = discord.Embed(
@@ -259,12 +282,16 @@ class MusicBot(commands.Cog):
         embed.add_field(name='!veia', value='Abre o jogo da velha (os dois players precisam dar o comando)')
     
         await context.send(embed=embed)
+        self.np_is_running = False
 
 
     @commands.command()
     async def p(self, context, *args):
         """
             !p: dar play em uma música
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+            param args: argumentos passados após o comando
         """
 
         query = " ".join(args)
@@ -276,10 +303,11 @@ class MusicBot(commands.Cog):
             await context.send("Você precisa ta num canal, lerdão. Vai escutar como?")
         else:
             song = self.find_url_youtube(query, context)
-            #a função tem dois returns. Foi o jeito q pensei na hora. deve ter jeito  melhor
+            #a função tem dois returns de tipos diferentes. Foi o jeito q pensei na hora. deve ter jeito melhor
             if type(song) == type(True):
                 await context.send("Nao consegui achá :O.")
             else:
+                #manda mensagem específica caso tenha alguma palavra chave encontrada na descrição da música
                 for key, value in self.pode_ser_alguem.items():
                     for key_wrod in value["keys"]:
                         substr = re.escape(key_wrod)
@@ -289,6 +317,7 @@ class MusicBot(commands.Cog):
 
                 await context.send("%s adicionada a fila" % song["title"])
                 self.music_queue.append([song, voice_channel])
+                self.np_is_running = False
 
                 if not self.is_playing:
                     await self.play_music(0)
@@ -298,6 +327,8 @@ class MusicBot(commands.Cog):
     async def q(self, context):
         """
             !q: mostrar a lista de músicas dividida em paginas (10 musicas por pagina)
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
 
         retval = "```"
@@ -324,8 +355,7 @@ class MusicBot(commands.Cog):
                 all_music_pages.append(embed)
                 
                 embed = discord.Embed(
-                    title="Iremoví depois:",
-                    #timestamp=self.now_playing["timestamp"]
+                    title="Iremoví depois:"
                 )
 
                 retval = "```"
@@ -350,10 +380,14 @@ class MusicBot(commands.Cog):
         await message.add_reaction("▶️")
         await message.add_reaction("⏭")
         
+        self.np_is_running = False        
 
         def check(reaction, user):
             """
-            Ter a certeza de que as reações que o bot colocou que serão processadas
+                Ter a certeza de que somente as reações do usuário que chamou o comando serão processadas
+
+                param reaction: reação dada na mensagem
+                param user: usuário que reagiu
             """
 
             return user == context.author and str(reaction.emoji) in ["◀️", "▶️", "⏮", "⏭"]
@@ -393,7 +427,9 @@ class MusicBot(commands.Cog):
     @commands.command()
     async def skip(self, context):
         """
-        !skip: pula pra próxima música
+            !skip: pula pra próxima música
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
     
         if self.voice_channel != "":
@@ -408,7 +444,10 @@ class MusicBot(commands.Cog):
     @commands.command()
     async def skipto(self, context, *args):
         """
-        !skipto: pula pra uma música específica
+            !skipto: pula pra uma música específica
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+            param args: argumentos passados após o comando
         """
 
         music_n = " ".join(args)
@@ -424,28 +463,39 @@ class MusicBot(commands.Cog):
     @commands.command()
     async def pause(self, context):
         """
-        !pause: pausa a musica
+            !pause: pausa a musica
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
+
         if self.is_playing:
             self.voice_channel.pause()
             self.is_playing = False
+            self.voice_source.is_source_paused = True
+            self.np_is_running = False
 
 
     @commands.command()
     async def resume(self, context):
         """
-        !resume: continua a musica pausada
+            !resume: continua a musica pausada
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
 
         if not self.is_playing:
             self.voice_channel.resume()
             self.is_playing = True
-    
+            self.voice_source.is_source_paused = False
+            self.np_is_running = False
+
 
     @commands.command()
     async def dc(self, context):
         """
-        !dc: desconecta o bot da sala
+            !dc: desconecta o bot da sala
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
     
         if context.author.voice is None:
@@ -453,6 +503,7 @@ class MusicBot(commands.Cog):
             return
 
         if self.voice_channel != "":
+            self.np_is_running = False
             await context.send("Toino lá. Vlw Flws :3")
             await context.voice_client.disconnect()
 
@@ -460,17 +511,23 @@ class MusicBot(commands.Cog):
     @commands.command()
     async def lyrics(self, context, *args):
         """
-        !lyrics: mostra a letra da musica atual ou de uma especifica
+            !lyrics: mostra a letra da musica atual ou de uma especifica
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+            param args: argumentos passados após o comando
         """
 
         music_info = ":".join(args).replace(":", " ").split("#")
 
+        #se foi passado dois parametros no comando (levando em conta o separador #), busca a musica pedida
         if len(music_info) == 2:
             music_name = music_info[0]
             music_artist = music_info[1]
+        #caso o numero de parametros passados estejam errados
         elif len(music_info) != 2 and len(music_info) != 1:
             await context.send("Para uma música específica, deve ser pesquisada como: ```nome da musica#artista```")
             return
+        #se passou somente o comando, busca a letra da musica que está tocando
         elif len(music_info) == 1:
             if self.is_playing:
                 music_name = self.now_playing["track"]
@@ -488,23 +545,37 @@ class MusicBot(commands.Cog):
             colour=context.author.colour,
         )
 
-        #embed.set_thumbnail(url=song["thumbnail"]["genius"])
         embed.set_author(name=music_artist)
+        self.np_is_running = False
         await context.send(embed=embed)
 
 
     @commands.command()
     async def clear(self, context):
         """
-        !clear: limpa a lista de musicas
+            !clear: limpa a lista de musicas
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+            param args: argumentos passados após o comando
         """
+
+        if context.author.voice is None:
+            await context.send("Cê nem ta no canal. Quer excluir as músicas pq?")
+            return
+            
         self.music_queue = []
+
+        self.np_is_running = False
+        await context.send("Lista de músicas nova em folha")
 
     
     @commands.command()
     async def remove(self, context, *args):
         """
-        !remove: mostra a letra da musica atual ou de uma especifica
+            !remove: mostra a letra da musica atual ou de uma especifica
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+            param args: argumentos passados após o comando
         """
 
         music_n = int(" ".join(args))
@@ -515,16 +586,23 @@ class MusicBot(commands.Cog):
         #verifica se está em algum canal de voz
         if self.voice_channel != "":
             if len(self.music_queue) >= music_n:
+                self.np_is_running = False
                 self.music_queue.pop(music_n - 1)
 
 
     @commands.command()
     async def np(self, context):
         """
-        !np: musica tocando na hora
+            !np: musica tocando na hora
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+            param args: argumentos passados após o comando
         """
 
-        self.music_stop_counter = True
+        #precaução caso haja algum comando !np executado anteriormente e a música desse card ainda não acabou
+        #isso faz com que o loop desse card finalize, e a atualização do tempo decorrido da música pare
+        self.voice_source.np_command = True
+        self.np_is_running = False
 
         #verifica se está em algum canal de voz
         if self.voice_channel != "":
@@ -541,8 +619,8 @@ class MusicBot(commands.Cog):
             requested_by_display_name = self.now_playing["requested_by"].display_name
             requested_by_avatar_url = self.now_playing["requested_by"].avatar_url
 
-            current_time = divmod(self.music_atual_time, 60)
-            music_duration = divmod(self.now_playing["video_duration"], 60)
+            current_time = divmod(self.get_music_progress(), 60)
+            music_duration = divmod(int(self.now_playing["video_duration"]), 60)
 
             show_time = f"{int(current_time[0])}:{round(current_time[1]):02}/{int(music_duration[0])}:{round(music_duration[1]):02}"
 
@@ -561,14 +639,16 @@ class MusicBot(commands.Cog):
 
             message = await context.send(embed=embed)
 
-            self.music_stop_counter = False
+            self.voice_source.np_command = False
+            #após realizar a configuração inicial do card da música atual, seta a flag que irá manter
+            #o loop que atualiza o tempo decorrido da música
+            self.np_is_running = True
 
-            while not self.music_stop_counter:
-                time.sleep(1)
-                current_time = divmod(self.music_atual_time, 60)
-                show_time = f"{int(current_time[0])}:{round(current_time[1]):02}/{int(music_duration[0])}:{round(music_duration[1]):02}"
-                current_time = divmod(self.music_atual_time, 60)
-                music_duration = divmod(self.now_playing["video_duration"], 60)
+            #TODO: o while irá atualizar somente o tempo decorrido da música. Mas por se tratar de cards,
+            #toda sua estrutura deve ser refeita. Por isso a repetição do código do início do método
+            time.sleep(1)
+            while self.np_is_running:
+                current_time = divmod(self.get_music_progress(), 60)
 
                 show_time = f"{int(current_time[0])}:{round(current_time[1]):02}/{int(music_duration[0])}:{round(music_duration[1]):02}"
 
@@ -591,25 +671,4 @@ class MusicBot(commands.Cog):
                     pass
 
                 await message.edit(embed=new_embed)
-
-            #print("terminou uma")
-
-
-    
-    # @commands.command()
-    # async def pos(self, context):
-    #     """
-    #     !pos:
-    #     """
-
-    #     current_time = divmod(self.music_atual_time, 60)
-    #     music_duration = divmod(self.now_playing["video_duration"], 60)
-
-    #     show_time = f"{int(current_time[0])}:{round(current_time[1]):02}/{int(music_duration[0])}:{round(music_duration[1]):02}"
-
-    #     message = await context.send(show_time)
-    #     while True:
-    #         time.sleep(1)
-    #         current_time = divmod(self.music_atual_time, 60)
-    #         show_time = f"{int(current_time[0])}:{round(current_time[1]):02}/{int(music_duration[0])}:{round(music_duration[1]):02}"
-    #         await message.edit(content=show_time)
+                time.sleep(1)
