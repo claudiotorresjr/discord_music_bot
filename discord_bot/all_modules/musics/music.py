@@ -294,6 +294,8 @@ class MusicBot(commands.Cog):
             param args: argumentos passados após o comando
         """
 
+        self.np_is_running = False
+
         query = " ".join(args)
 
         #salva o canal que o usuario esta
@@ -317,7 +319,6 @@ class MusicBot(commands.Cog):
 
                 await context.send("%s adicionada a fila" % song["title"])
                 self.music_queue.append([song, voice_channel])
-                self.np_is_running = False
 
                 if not self.is_playing:
                     await self.play_music(0)
@@ -330,6 +331,8 @@ class MusicBot(commands.Cog):
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
+
+        self.np_is_running = False
 
         retval = "```"
         all_music_pages = []
@@ -379,8 +382,6 @@ class MusicBot(commands.Cog):
         await message.add_reaction("◀️")
         await message.add_reaction("▶️")
         await message.add_reaction("⏭")
-        
-        self.np_is_running = False        
 
         def check(reaction, user):
             """
@@ -431,6 +432,8 @@ class MusicBot(commands.Cog):
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
+        
+        self.np_is_running = False
     
         if self.voice_channel != "":
             if len(self.music_queue) >= 0:
@@ -450,6 +453,8 @@ class MusicBot(commands.Cog):
             param args: argumentos passados após o comando
         """
 
+        self.np_is_running = False
+
         music_n = " ".join(args)
         if self.voice_channel != "":
             if len(self.music_queue) >= int(music_n):
@@ -468,11 +473,12 @@ class MusicBot(commands.Cog):
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
 
+        self.np_is_running = False
+
         if self.is_playing:
             self.voice_channel.pause()
             self.is_playing = False
             self.voice_source.is_source_paused = True
-            self.np_is_running = False
 
 
     @commands.command()
@@ -483,11 +489,12 @@ class MusicBot(commands.Cog):
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
 
+        self.np_is_running = False
+
         if not self.is_playing:
             self.voice_channel.resume()
             self.is_playing = True
             self.voice_source.is_source_paused = False
-            self.np_is_running = False
 
 
     @commands.command()
@@ -497,13 +504,14 @@ class MusicBot(commands.Cog):
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
+
+        self.np_is_running = False
     
         if context.author.voice is None:
             await context.send("Cê nem ta no canal. Quer expulsar o bot pq, cusão?")
             return
 
         if self.voice_channel != "":
-            self.np_is_running = False
             await context.send("Toino lá. Vlw Flws :3")
             await context.voice_client.disconnect()
 
@@ -516,6 +524,8 @@ class MusicBot(commands.Cog):
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
             param args: argumentos passados após o comando
         """
+
+        self.np_is_running = False
 
         music_info = ":".join(args).replace(":", " ").split("#")
 
@@ -546,7 +556,6 @@ class MusicBot(commands.Cog):
         )
 
         embed.set_author(name=music_artist)
-        self.np_is_running = False
         await context.send(embed=embed)
 
 
@@ -559,13 +568,14 @@ class MusicBot(commands.Cog):
             param args: argumentos passados após o comando
         """
 
+        self.np_is_running = False
+
         if context.author.voice is None:
             await context.send("Cê nem ta no canal. Quer excluir as músicas pq?")
             return
             
         self.music_queue = []
 
-        self.np_is_running = False
         await context.send("Lista de músicas nova em folha")
 
     
@@ -578,6 +588,8 @@ class MusicBot(commands.Cog):
             param args: argumentos passados após o comando
         """
 
+        self.np_is_running = False
+
         music_n = int(" ".join(args))
         if context.author.voice is None:
             await context.send("Cê nem ta no canal. Quer excluir a música pq?")
@@ -586,7 +598,6 @@ class MusicBot(commands.Cog):
         #verifica se está em algum canal de voz
         if self.voice_channel != "":
             if len(self.music_queue) >= music_n:
-                self.np_is_running = False
                 self.music_queue.pop(music_n - 1)
 
 
