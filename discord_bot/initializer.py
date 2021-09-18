@@ -16,7 +16,7 @@ class Initializer(object):
 
     def __init__(self, test_env):
         if test_env:
-            self.prefix = "#"
+            self.prefix = "-"
             self.TOKEN = "ODg4MDU3ODcxNjg4OTQxNTk4.YUNKVw.a7CELQe1QMeI7-e3CcVwlYNtrXo"
 
         self.my_bot = commands.Bot(command_prefix=self.prefix, help_command=None)
