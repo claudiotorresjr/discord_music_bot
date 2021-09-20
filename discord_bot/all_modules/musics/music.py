@@ -17,6 +17,19 @@ class MusicBot(commands.Cog):
         Classe base para os comandos relacionados ao bot de música
     """
 
+    gabi_oini = {
+        "source": "https://musica-alexa-claudio.s3.sa-east-1.amazonaws.com/oni_converted.mp3",
+        "title": "Gabi oini",
+        "description": "",
+        "track": "",
+        "artist": "Gabi suprema",
+        "requested_by": "O mundo",
+        "thumbnail": "",
+        "video_url": "",
+        "video_duration": 4,
+        "timestamp": datetime.datetime.utcnow()
+    }
+
     pode_ser_alguem = {
         "pode_ser_funk": {
             "keys": [
@@ -61,8 +74,9 @@ class MusicBot(commands.Cog):
 
         self.now_playing = ""
         self.voice_channel = ""
-        self.thread = ""
+        self.voice_channel_id = ""
         self.music_stop_counter = False
+        self.voice_source = ""
 
         self.genius_api_key = "KxJJBM-kYTWl3mQBB2LuPAU2WLDJyPqjL1IezfY3h7dke7s7v4F5N_3O4eV7AH66"
         self.genius = lg.Genius(self.genius_api_key)
@@ -94,7 +108,6 @@ class MusicBot(commands.Cog):
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
             "options": "-vn"
         }
-        self.voice_source = ""
 
 
     @commands.Cog.listener()
@@ -109,6 +122,23 @@ class MusicBot(commands.Cog):
         if self.bot.user.mentioned_in(message):
             await message.channel.send("Vo trabaiá hj não. Fica de boa aí")
 
+
+    def clean_all_configs(self):
+        """
+            Reseta todas as variáveis
+        """
+
+        self.is_playing = False
+        self.music_atual_time = ""
+        self.skiping = False
+        self.music_queue = []
+        self.np_is_running = False
+        self.now_playing = ""
+        self.voice_channel = ""
+        self.voice_channel_id = ""
+        self.music_stop_counter = False
+        self.voice_source = ""
+        
 
     def get_music_progress(self):
         if self.voice_source:
@@ -266,20 +296,20 @@ class MusicBot(commands.Cog):
             colour=context.author.colour,
         )
 
-        embed.add_field(name='!help', value='Isso aqui que cê ta vendo')
-        embed.add_field(name='!p <nome da musica>', value='Escutar a musiquinha que vc quer. Por enquanto não funfa playlist :(')
-        embed.add_field(name='!q', value='Mostra as músicas que estão em espera na fila')
-        embed.add_field(name='!skip', value='Pula pra próxima música')
-        embed.add_field(name='!skipto <numero>', value='Pula pra música desejada')
-        embed.add_field(name='!pause', value='Pausa a música atual (a próxima que não é, né)')
-        embed.add_field(name='!resume', value='Retorna do pause (me obrigaram a não usar unpause)')
-        embed.add_field(name='!dc', value='Chuta o bot do canal')
-        embed.add_field(name='!lyrics', value='Mostra a letra da música atual (porcamente ainda)')
-        embed.add_field(name='!lyrics <nome da musica#artista>', value='Mostra a letra da música desejada (porcamente ainda)')
-        embed.add_field(name='!clear', value='Limpa a lista de músicas')
-        embed.add_field(name='!remove <musica>', value='Remove a música (passa o índice, não o nome, porfa')
-        embed.add_field(name='!np', value='Mostra a música atual')
-        embed.add_field(name='!veia', value='Abre o jogo da velha (os dois players precisam dar o comando)')
+        embed.add_field(name='-help', value='Isso aqui que cê ta vendo')
+        embed.add_field(name='-p <nome da musica>', value='Escutar a musiquinha que vc quer. Por enquanto não funfa playlist :(')
+        embed.add_field(name='-q', value='Mostra as músicas que estão em espera na fila')
+        embed.add_field(name='-skip', value='Pula pra próxima música')
+        embed.add_field(name='-skipto <numero>', value='Pula pra música desejada')
+        embed.add_field(name='-pause', value='Pausa a música atual (a próxima que não é, né)')
+        embed.add_field(name='-resume', value='Retorna do pause (me obrigaram a não usar unpause)')
+        embed.add_field(name='-dc', value='Chuta o bot do canal')
+        embed.add_field(name='-lyrics', value='Mostra a letra da música atual (porcamente ainda)')
+        embed.add_field(name='-lyrics <nome da musica#artista>', value='Mostra a letra da música desejada (porcamente ainda)')
+        embed.add_field(name='-clear', value='Limpa a lista de músicas')
+        embed.add_field(name='-remove <musica>', value='Remove a música (passa o índice, não o nome, porfa')
+        embed.add_field(name='-np', value='Mostra a música atual')
+        embed.add_field(name='-veia', value='Abre o jogo da velha (os dois players precisam dar o comando)')
     
         await context.send(embed=embed)
         self.np_is_running = False
@@ -297,6 +327,9 @@ class MusicBot(commands.Cog):
         self.np_is_running = False
 
         query = " ".join(args)
+        if query == "":
+            await context.send("Ta quereno que eu toque o que?")
+            return
 
         #salva o canal que o usuario esta
         try:
@@ -304,24 +337,33 @@ class MusicBot(commands.Cog):
         except AttributeError:
             await context.send("Você precisa ta num canal, lerdão. Vai escutar como?")
         else:
-            song = self.find_url_youtube(query, context)
-            #a função tem dois returns de tipos diferentes. Foi o jeito q pensei na hora. deve ter jeito melhor
-            if type(song) == type(True):
-                await context.send("Nao consegui achá :O.")
-            else:
-                #manda mensagem específica caso tenha alguma palavra chave encontrada na descrição da música
-                for key, value in self.pode_ser_alguem.items():
-                    for key_wrod in value["keys"]:
-                        substr = re.escape(key_wrod)
-                        if re.compile(fr'\b{substr}\b', flags=re.I).findall(song["description"]):
-                            await context.send(value["frase"])
-                            break
+            if self.voice_channel == "" or voice_channel.id == self.voice_channel_id:
+                if self.voice_channel_id == "":
+                    self.voice_channel_id = voice_channel.id
+                    self.music_queue.append([self.gabi_oini, voice_channel])
 
-                await context.send("%s adicionada a fila" % song["title"])
-                self.music_queue.append([song, voice_channel])
+                if query != "gabioini":
+                    song = self.find_url_youtube(query, context)
+                    #a função tem dois returns de tipos diferentes. Foi o jeito q pensei na hora. deve ter jeito melhor
+                    if type(song) == type(True):
+                        await context.send("Nao consegui achá :O.")
+                        return
 
-                if not self.is_playing:
+                    #manda mensagem específica caso tenha alguma palavra chave encontrada na descrição da música
+                    for key, value in self.pode_ser_alguem.items():
+                        for key_wrod in value["keys"]:
+                            substr = re.escape(key_wrod)
+                            if re.compile(fr'\b{substr}\b', flags=re.I).findall(song["description"]):
+                                await context.send(value["frase"])
+                                break
+
+                    await context.send("%s adicionada a fila" % song["title"])
+                    self.music_queue.append([song, voice_channel])
+
+                if not self.is_playing or query == "gabioini":
                     await self.play_music(0)
+            else:
+                await context.send(f"{context.author.display_name}, o bot ta se divertindo com os de vdd em outro canal. Vai ficar sozinho aí :D")
 
     
     @commands.command()
@@ -512,6 +554,8 @@ class MusicBot(commands.Cog):
             return
 
         if self.voice_channel != "":
+            self.clean_all_configs()
+
             await context.send("Toino lá. Vlw Flws :3")
             await context.voice_client.disconnect()
 
@@ -616,7 +660,7 @@ class MusicBot(commands.Cog):
         self.np_is_running = False
 
         #verifica se está em algum canal de voz
-        if self.voice_channel != "":
+        if self.voice_channel != "" and self.now_playing["artist"] != "Gabi suprema":
             embed = discord.Embed(
                 title="Tamovino agora:",
                 colour=context.author.colour,
@@ -683,3 +727,29 @@ class MusicBot(commands.Cog):
 
                 await message.edit(embed=new_embed)
                 time.sleep(1)
+
+
+    @commands.command()
+    async def gabi(self, context):
+        """
+            !gabi: Mostra a Gabi cantando lindamente
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+        """
+
+        self.np_is_running = False
+
+        if context.author.voice is None:
+            await context.send("Cê precisa ta num canal pra ouvir a GabiGod")
+            return
+
+        if self.voice_channel == "":
+            await context.invoke(self.bot.get_command('p'), 'gabioini')
+            return
+
+
+        if not self.is_playing:
+            gabi_audio = musics.SourcePlaybackCounter(discord.FFmpegPCMAudio(self.gabi_oini["source"], **self.FFMPEG_OPTIONS), int(self.gabi_oini["video_duration"]))
+            self.voice_channel.play(
+                gabi_audio.voice_source
+            )
