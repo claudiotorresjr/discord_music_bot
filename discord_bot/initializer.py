@@ -11,12 +11,12 @@ class Initializer(object):
         Classe base para a criação do bot e para importar e instanciar todas as classes necessárias
     """
 
-    prefix = "*"
+    prefix = "-"
     TOKEN = "ODg3NTE4NDYyMzk2NzQzNzEy.YUFT-g.ESw2uCJIcFNw1HtiJ9OhKhgJXfE"
 
     def __init__(self, test_env):
         if test_env:
-            self.prefix = "-"
+            self.prefix = "#"
             self.TOKEN = "ODg4MDU3ODcxNjg4OTQxNTk4.YUNKVw.a7CELQe1QMeI7-e3CcVwlYNtrXo"
 
         self.my_bot = commands.Bot(command_prefix=self.prefix, help_command=None)
