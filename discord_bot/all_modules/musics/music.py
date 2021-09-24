@@ -17,6 +17,22 @@ class MusicBot(commands.Cog):
         Classe base para os comandos relacionados ao bot de música
     """
 
+    all_commands = [
+        '#help',
+        '#p',
+        '#q',
+        '#skip',
+        '#skipto',
+        '#pause',
+        '#resume',
+        '#dc',
+        '#lyrics',
+        '#clear'
+        '#remove',
+        '#np',
+        '#gabi'
+    ]
+
     gabi_oini = {
         "source": "https://musica-alexa-claudio.s3.sa-east-1.amazonaws.com/oni_converted.mp3",
         "title": "Gabi oini",
@@ -50,6 +66,8 @@ class MusicBot(commands.Cog):
             "frase": "Será que ta tudo bem com o Matheus? Deve ta chorando, tadinho :("
         }
     }
+
+    bot_request = False
 
 
     def __init__(self, bot):
@@ -117,6 +135,21 @@ class MusicBot(commands.Cog):
 
             param message: mensagem enviada
         """
+
+        if "Amonimiosu#8972" in str(message.author):
+            split_msg = message.content.split(" ")
+            command = split_msg[0]
+            if command in self.all_commands:
+                args = False
+                if len(split_msg) > 1:
+                    args = split_msg[1]
+                ctx = await self.bot.get_context(message)
+
+                self.bot_request = True
+                if not args:
+                    await ctx.invoke(self.bot.get_command(command.split('#')[1]))
+                else:
+                    await ctx.invoke(self.bot.get_command(command.split('#')[1]), args)
 
         #verifica se o bot foi marcado e manda uma resposta
         if self.bot.user.mentioned_in(message):
@@ -236,7 +269,7 @@ class MusicBot(commands.Cog):
             self.skiping = False
 
 
-    async def play_music(self, music_n):
+    async def play_music(self, music_n, volume=False):
         """
             Toca a primeira música, ou força a execução de outra (pelo skip)
 
@@ -276,6 +309,9 @@ class MusicBot(commands.Cog):
                 self.voice_source.voice_source,
                 after=lambda e: self.play_next()
             )
+            #if volume:
+            #    self.voice_channel = discord.PCMVolumeTransformer(self.voice_channel, volume=1.0)
+
             self.voice_source.is_source_playing = True
             self.voice_source.is_source_paused = False
         else:
@@ -334,7 +370,11 @@ class MusicBot(commands.Cog):
 
         #salva o canal que o usuario esta
         try:
-            voice_channel = context.author.voice.channel
+            if self.bot_request == True and self.bot.voice_clients:
+                voice_channel = self.bot.voice_clients[0].channel
+                self.bot_request = False
+            else:
+                voice_channel = context.author.voice.channel
         except AttributeError:
             await context.send("Você precisa ta num canal, lerdão. Vai escutar como?")
         else:
@@ -362,7 +402,7 @@ class MusicBot(commands.Cog):
                     self.music_queue.append([song, voice_channel])
 
                 if not self.is_playing or query == "gabioini":
-                    await self.play_music(0)
+                    await self.play_music(0, True)
             else:
                 await context.send(f"{context.author.display_name}, o bot ta se divertindo com os de vdd em outro canal. Vai ficar sozinho aí :D")
 
@@ -550,7 +590,7 @@ class MusicBot(commands.Cog):
 
         self.np_is_running = False
     
-        if context.author.voice is None:
+        if context.author.voice is None or context.author.voice != self.voice_channel:
             await context.send("Cê nem ta no canal. Quer expulsar o bot pq, cusão?")
             return
 
@@ -615,7 +655,7 @@ class MusicBot(commands.Cog):
 
         self.np_is_running = False
 
-        if context.author.voice is None:
+        if context.author.voice is None or context.author.voice != self.voice_channel:
             await context.send("Cê nem ta no canal. Quer excluir as músicas pq?")
             return
             
@@ -636,7 +676,7 @@ class MusicBot(commands.Cog):
         self.np_is_running = False
 
         music_n = int(" ".join(args))
-        if context.author.voice is None:
+        if context.author.voice is None or context.author.voice != self.voice_channel:
             await context.send("Cê nem ta no canal. Quer excluir a música pq?")
             return
 
@@ -740,7 +780,7 @@ class MusicBot(commands.Cog):
 
         self.np_is_running = False
 
-        if context.author.voice is None:
+        if context.author.voice is None or context.author.voice != self.voice_channel:
             await context.send("Cê precisa ta num canal pra ouvir a GabiGod")
             return
 
