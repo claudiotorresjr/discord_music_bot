@@ -18,19 +18,19 @@ class MusicBot(commands.Cog):
     """
 
     all_commands = [
-        '#help',
-        '#p',
-        '#q',
-        '#skip',
-        '#skipto',
-        '#pause',
-        '#resume',
-        '#dc',
-        '#lyrics',
-        '#clear'
-        '#remove',
-        '#np',
-        '#gabi'
+        '-help',
+        '-p',
+        '-q',
+        '-skip',
+        '-skipto',
+        '-pause',
+        '-resume',
+        '-dc',
+        '-lyrics',
+        '-clear'
+        '-remove',
+        '-np',
+        '-gabi'
     ]
 
     gabi_oini = {
@@ -147,9 +147,9 @@ class MusicBot(commands.Cog):
 
                 self.bot_request = True
                 if not args:
-                    await ctx.invoke(self.bot.get_command(command.split('#')[1]))
+                    await ctx.invoke(self.bot.get_command(command.split('-')[1]))
                 else:
-                    await ctx.invoke(self.bot.get_command(command.split('#')[1]), args)
+                    await ctx.invoke(self.bot.get_command(command.split('-')[1]), args)
 
         #verifica se o bot foi marcado e manda uma resposta
         if self.bot.user.mentioned_in(message):
