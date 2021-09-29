@@ -370,7 +370,7 @@ class MusicBot(commands.Cog):
 
         #salva o canal que o usuario esta
         try:
-            if self.bot_request == True and self.bot.voice_clients:
+            if self.bot_request and self.bot.voice_clients:
                 voice_channel = self.bot.voice_clients[0].channel
                 self.bot_request = False
             else:
@@ -589,12 +589,14 @@ class MusicBot(commands.Cog):
         """
 
         self.np_is_running = False
-    
-        if context.author.voice is None or context.author.voice != self.voice_channel:
-            await context.send("Cê nem ta no canal. Quer expulsar o bot pq, cusão?")
-            return
 
-        if self.voice_channel != "":
+        if not context.voice_client:
+            await context.send("dc errado hein? Eu nem to cantano.")
+
+        elif not context.author.voice or context.author.voice.channel != context.voice_client.channel:
+            await context.send("Cê nem ta no canal. Quer expulsar o bot pq, cusão?")
+
+        elif context.author.voice.channel and context.author.voice.channel == context.voice_client.channel:
             self.clean_all_configs()
 
             await context.send("Toino lá. Vlw Flws :3")
@@ -770,27 +772,26 @@ class MusicBot(commands.Cog):
                 time.sleep(1)
 
 
-    @commands.command()
-    async def gabi(self, context):
-        """
-            !gabi: Mostra a Gabi cantando lindamente
+    # @commands.command()
+    # async def gabi(self, context):
+    #     """
+    #         !gabi: Mostra a Gabi cantando lindamente
 
-            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
-        """
+    #         param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+    #     """
 
-        self.np_is_running = False
+    #     self.np_is_running = False
 
-        if context.author.voice is None or context.author.voice != self.voice_channel:
-            await context.send("Cê precisa ta num canal pra ouvir a GabiGod")
-            return
+    #     if not context.author.voice or context.author.voice.channel != context.voice_client.channel:
+    #         await context.send("Cê precisa ta num canal pra ouvir a GabiGod")
+    #         return
 
-        if self.voice_channel == "":
-            await context.invoke(self.bot.get_command('p'), 'gabioini')
-            return
+    #     elif context.author.voice.channel and context.author.voice.channel == context.voice_client.channel:
+    #         await context.invoke(self.bot.get_command('p'), 'gabioini')
+    #         return
 
-
-        if not self.is_playing:
-            gabi_audio = musics.SourcePlaybackCounter(discord.FFmpegPCMAudio(self.gabi_oini["source"], **self.FFMPEG_OPTIONS), int(self.gabi_oini["video_duration"]))
-            self.voice_channel.play(
-                gabi_audio.voice_source
-            )
+    #     if not self.is_playing:
+    #         gabi_audio = musics.SourcePlaybackCounter(discord.FFmpegPCMAudio(self.gabi_oini["source"], **self.FFMPEG_OPTIONS), int(self.gabi_oini["video_duration"]))
+    #         self.voice_channel.play(
+    #             gabi_audio.voice_source
+    #         )
