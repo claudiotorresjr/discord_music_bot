@@ -589,17 +589,23 @@ class MusicBot(commands.Cog):
         """
 
         self.np_is_running = False
+    
+        if not context.author.voice:
+            await context.send("Cê nem ta no canal. Quer expulsar o bot pq, cusão?")
+            return
 
         if not context.voice_client:
-            await context.send("dc errado hein? Eu nem to cantano.")
-
-        elif not context.author.voice or context.author.voice.channel != context.voice_client.channel:
-            await context.send("Cê nem ta no canal. Quer expulsar o bot pq, cusão?")
-
-        elif context.author.voice.channel and context.author.voice.channel == context.voice_client.channel:
+            await context.send("Limpando a sujeira da última party...")
             self.clean_all_configs()
+            await context.voice_client.disconnect()
 
+            return
+
+        if context.author.voice.channel != context.voice_client.channel:
+            await context.send("Cê nem ta no canal. Quer expulsar o bot pq, cusão?")
+        else:
             await context.send("Toino lá. Vlw Flws :3")
+            self.clean_all_configs()
             await context.voice_client.disconnect()
 
 
@@ -656,14 +662,22 @@ class MusicBot(commands.Cog):
         """
 
         self.np_is_running = False
-
-        if context.author.voice is None or context.author.voice != self.voice_channel:
+            
+        if not context.author.voice:
             await context.send("Cê nem ta no canal. Quer excluir as músicas pq?")
             return
-            
-        self.music_queue = []
 
-        await context.send("Lista de músicas nova em folha")
+        if not context.voice_client:
+            await context.send("Limpando as músicas da última party...")
+            self.music_queue = []
+
+            return
+
+        if context.author.voice.channel != context.voice_client.channel:
+            await context.send("Cê nem ta no canal. Quer excluir as músicas pq?")
+        else:
+            self.music_queue = []
+            await context.send("Lista de músicas nova em folha")
 
     
     @commands.command()
@@ -677,15 +691,24 @@ class MusicBot(commands.Cog):
 
         self.np_is_running = False
 
-        music_n = int(" ".join(args))
-        if context.author.voice is None or context.author.voice != self.voice_channel:
+        music_n = int(" ".join(args))            
+        if not context.author.voice:
             await context.send("Cê nem ta no canal. Quer excluir a música pq?")
             return
 
-        #verifica se está em algum canal de voz
-        if self.voice_channel != "":
-            if len(self.music_queue) >= music_n:
-                self.music_queue.pop(music_n - 1)
+        if not context.voice_client:
+            await context.send("Não quero")
+            return
+
+        if context.author.voice.channel != context.voice_client.channel:
+            await context.send("Cê nem ta no canal. Quer excluir a música pq?")
+        else:
+            #verifica se está em algum canal de voz
+            if self.voice_channel != "":
+                if len(self.music_queue) >= music_n:
+                    self.music_queue.pop(music_n - 1)
+
+            await context.send("Pronto. Foi pro lixo.")
 
 
     @commands.command()
