@@ -597,7 +597,6 @@ class MusicBot(commands.Cog):
         if not context.voice_client:
             await context.send("Limpando a sujeira da última party...")
             self.clean_all_configs()
-            await context.voice_client.disconnect()
 
             return
 
