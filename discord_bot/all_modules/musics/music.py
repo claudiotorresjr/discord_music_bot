@@ -277,8 +277,8 @@ class MusicBot(commands.Cog):
             display_name = context.author.display_name
             timestamp = datetime.datetime.utcnow()
             if from_playlist:
-                requested_by = from_playlist["requested_by"],
-                display_name = from_playlist["display_name"],
+                requested_by = from_playlist["requested_by"]
+                display_name = from_playlist["display_name"]
                 timestamp = from_playlist["timestamp"]
 
         return {
