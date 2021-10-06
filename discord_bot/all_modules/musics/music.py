@@ -8,6 +8,9 @@ import time
 import youtube_dl
 import lyricsgenius as lg
 
+import googleapiclient.discovery
+from urllib.parse import parse_qs, urlparse
+
 #from discord_bot import all_modules
 from all_modules import musics
 
@@ -43,7 +46,8 @@ class MusicBot(commands.Cog):
         "thumbnail": "",
         "video_url": "",
         "video_duration": 4,
-        "timestamp": datetime.datetime.utcnow()
+        "timestamp": datetime.datetime.utcnow(),
+        "from_playlist": False
     }
 
     pode_ser_alguem = {
@@ -126,7 +130,16 @@ class MusicBot(commands.Cog):
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
             "options": "-vn"
         }
+        self.GOOGLE_API_KEY = "AIzaSyAiWvkOhhsUpXZX4xHg6vArSxGrSkN1OZM"
+        self.youtube_url = "https://www.youtube.com/watch?v="
 
+    def get_music_progress(self):
+        if self.voice_source:
+            return self.voice_source.music_progress
+            #TODO: Properly implement this
+            #       Correct calculation should be bytes_read/192k
+            #       192k AKA sampleRate * (bitDepth / 8) * channelCount
+            #       Change frame_count to bytes_read in the PatchedBuff
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -155,6 +168,31 @@ class MusicBot(commands.Cog):
         if self.bot.user.mentioned_in(message):
             await message.channel.send("Vo trabaiá hj não. Fica de boa aí")
 
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+        
+        #verifica se é o bot que vez algo de diferente no canal de voz (acho que verifica só se entrou/saiu)
+        if not member.id == self.bot.user.id:
+            return
+
+        #verifica se o canal anterior é None. Então o bot chegou limpinho
+        elif before.channel is None:
+            voice = after.channel.guild.voice_client
+            time = 0
+            #loop para ver se o bot ta tocando algo ou nao.
+            while True:
+                await asyncio.sleep(1)
+                time = time + 1
+                #se começar a tocar ou a musica for pausada, a contagem é reiniciada
+                if voice.is_playing() and not voice.is_paused():
+                    time = 0
+                    #se deu 120 segundos, ele sai do canal
+                if time == 120:
+                    await self.bot.get_channel(891471706038890536).send("Vão me deixar no vacuo? Vou embora então. Bai")
+                    await voice.disconnect()
+                    self.clean_all_configs()
+                if not voice.is_connected():
+                    break
 
     def clean_all_configs(self):
         """
@@ -171,18 +209,41 @@ class MusicBot(commands.Cog):
         self.voice_channel_id = ""
         self.music_stop_counter = False
         self.voice_source = ""
-        
+    
+    def extract_url_from_playlist(self, url, context, voice_channel):
+        #extract playlist id from url
+        query = parse_qs(urlparse(url).query, keep_blank_values=True)
+        playlist_id = query["list"][0]
 
-    def get_music_progress(self):
-        if self.voice_source:
-            return self.voice_source.music_progress
-            #TODO: Properly implement this
-            #       Correct calculation should be bytes_read/192k
-            #       192k AKA sampleRate * (bitDepth / 8) * channelCount
-            #       Change frame_count to bytes_read in the PatchedBuff
+        youtube = googleapiclient.discovery.build("youtube", "v3", developerKey = self.GOOGLE_API_KEY)
 
+        request = youtube.playlistItems().list(
+            part = "snippet",
+            playlistId = playlist_id,
+            maxResults = 50
+        )
+        response = request.execute()
 
-    def find_url_youtube(self, url, context):
+        playlist_items = []
+        while request is not None:
+            response = request.execute()
+            playlist_items += response["items"]
+            request = youtube.playlistItems().list_next(request, response)
+
+        timestamp = datetime.datetime.utcnow()
+        for t in playlist_items:
+            song = {
+                "title": t["snippet"]["title"],
+                "requested_by": context.author,
+                "display_name": context.author.display_name,
+                "video_url": f'{self.youtube_url}{t["snippet"]["resourceId"]["videoId"]}',
+                "timestamp": timestamp,
+                "from_playlist": True
+            }
+
+            self.music_queue.append([song, voice_channel])
+
+    def find_url_youtube(self, url, context, from_playlist=False):
         """
             Baixa pela url (ou nome da musica) o audio da musica
 
@@ -212,33 +273,36 @@ class MusicBot(commands.Cog):
             except Exception:
                 thumb = None
 
+            requested_by = context.author
+            display_name = context.author.display_name
+            timestamp = datetime.datetime.utcnow()
+            if from_playlist:
+                requested_by = from_playlist["requested_by"],
+                display_name = from_playlist["display_name"],
+                timestamp = from_playlist["timestamp"]
+
         return {
             "source": info["formats"][0]["url"],
-            "title": info["title"],
+            "title":  info["title"],
             "description": info["description"],
             # porcamente tira o (Ao Vivo) para facilitar encontrar a letra
             "track": info_track.split("(Ao Vivo)")[0],
             # porcamente tira o FEAT. para facilitar encontrar a letra
             "artist": info_artist.split("FEAT.")[0],
-            "requested_by": context.author,
+            "requested_by": requested_by,
+            "display_name": display_name,
             "thumbnail": thumb,
-            "video_url": f"https://www.youtube.com/watch?v={info['webpage_url_basename']}",
+            "video_url": f"{self.youtube_url}{info['webpage_url_basename']}",
             "video_duration": info["duration"],
             # guardar o horário que a música foi pedida
-            "timestamp": datetime.datetime.utcnow()
+            "timestamp": timestamp,
+            "from_playlist": from_playlist
         }
 
-
-    def play_next(self):
+    def play_next(self, context):
         """
             Toca a próxima música da lista de músicas
         """
-
-        #TODO: arrumar a thread
-        #try:
-        #    self.thread.join()
-        #except Exception:
-        #    pass
 
         if len(self.music_queue) > 0 and not self.skiping:
             self.np_is_running = False
@@ -247,9 +311,14 @@ class MusicBot(commands.Cog):
             self.music_atual_time = 0
 
             self.start_time = 0
-            self.is_playing = True            
+            self.is_playing = True
+            
+            if self.music_queue[0][0]["from_playlist"]:
+                url = self.music_queue[0][0]["video_url"]
+                self.music_queue[0][0] = self.find_url_youtube(url, context, self.music_queue[0][0])
 
             first_url = self.music_queue[0][0]["source"]
+
             self.now_playing = self.music_queue[0][0]
             
             #exclui a musica da lista
@@ -260,7 +329,7 @@ class MusicBot(commands.Cog):
             #after: quando terminar de tocar, vai chamar novamente a funcao play_next
             self.voice_channel.play(
                 self.voice_source.voice_source,
-                after=lambda e: self.play_next()
+                after=lambda e: self.play_next(context)
             )
             self.voice_source.is_source_playing = True
             self.voice_source.is_source_paused = False
@@ -268,19 +337,12 @@ class MusicBot(commands.Cog):
             self.is_playing = False
             self.skiping = False
 
-
-    async def play_music(self, music_n, volume=False):
+    async def play_music(self, music_n, context):
         """
             Toca a primeira música, ou força a execução de outra (pelo skip)
 
             param music_n: índice da música escolhida para o skip (ou 0, caso seja a primeira)
         """
-
-        #TODO: arrumar a thread
-        # try:
-        #     self.thread.join()
-        # except Exception:
-        #     pass
 
         if len(self.music_queue) > 0:
             self.np_is_running = False
@@ -288,6 +350,10 @@ class MusicBot(commands.Cog):
             self.music_atual_time = 0
 
             self.is_playing = True
+            
+            if self.music_queue[music_n][0]["from_playlist"]:
+                url = self.music_queue[music_n][0]["video_url"]
+                self.music_queue[music_n][0] = self.find_url_youtube(url, context, self.music_queue[music_n][0])
 
             first_url = self.music_queue[music_n][0]["source"]
 
@@ -307,21 +373,18 @@ class MusicBot(commands.Cog):
             #after: quando terminar de tocar, vai chamar novamente a funcao play_next
             self.voice_channel.play(
                 self.voice_source.voice_source,
-                after=lambda e: self.play_next()
+                after=lambda e: self.play_next(context)
             )
-            #if volume:
-            #    self.voice_channel = discord.PCMVolumeTransformer(self.voice_channel, volume=1.0)
 
             self.voice_source.is_source_playing = True
             self.voice_source.is_source_paused = False
         else:
             self.is_playing = False
 
-
     @commands.command()
     async def help(self, context):
         """
-            !help: Lista como usar os comandos
+            -help: Lista como usar os comandos
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
@@ -351,11 +414,10 @@ class MusicBot(commands.Cog):
         await context.send(embed=embed)
         self.np_is_running = False
 
-
     @commands.command()
     async def p(self, context, *args):
         """
-            !p: dar play em uma música
+            -p: dar play em uma música
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
             param args: argumentos passados após o comando
@@ -383,7 +445,11 @@ class MusicBot(commands.Cog):
                     self.voice_channel_id = voice_channel.id
                     self.music_queue.append([self.gabi_oini, voice_channel])
 
-                if query != "gabioini":
+                #se tiver isso, provavelmente o individuo ta querendo uma playlist
+                if "playlist?list" in query:
+                    self.extract_url_from_playlist(query, context, voice_channel)
+                    await context.send("Acredito que toda caralhada da playlist tá na queue. Se não tiver, fodase.")
+                else:
                     song = self.find_url_youtube(query, context)
                     #a função tem dois returns de tipos diferentes. Foi o jeito q pensei na hora. deve ter jeito melhor
                     if type(song) == type(True):
@@ -401,16 +467,15 @@ class MusicBot(commands.Cog):
                     await context.send("%s adicionada a fila" % song["title"])
                     self.music_queue.append([song, voice_channel])
 
-                if not self.is_playing or query == "gabioini":
-                    await self.play_music(0, True)
+                if not self.is_playing:
+                    await self.play_music(0, context)
             else:
                 await context.send(f"{context.author.display_name}, o bot ta se divertindo com os de vdd em outro canal. Vai ficar sozinho aí :D")
 
-    
     @commands.command()
     async def q(self, context):
         """
-            !q: mostrar a lista de músicas dividida em paginas (10 musicas por pagina)
+            -q: mostrar a lista de músicas dividida em paginas (10 musicas por pagina)
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
@@ -420,12 +485,13 @@ class MusicBot(commands.Cog):
         retval = "```"
         all_music_pages = []
         embed = discord.Embed(
-            title="Iremoví depois:"
+            title="Iremoví depois:",
+            description=f"Temo {len(self.music_queue)} músicas"
         )
         for i in range(0, len(self.music_queue)):
             music_name = self.music_queue[i][0]["title"]
             requested_by = str(self.music_queue[i][0]["requested_by"])
-            requested_by_display_name = self.music_queue[i][0]["requested_by"].display_name
+            requested_by_display_name = self.music_queue[i][0]["display_name"]
 
             timestamp = self.music_queue[i][0]['timestamp'].strftime('%H:%M')
             embed.add_field(
@@ -507,11 +573,10 @@ class MusicBot(commands.Cog):
                 #acaba com o loop após o timeout
                 break
 
-    
     @commands.command()
     async def skip(self, context):
         """
-            !skip: pula pra próxima música
+            -skip: pula pra próxima música
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
@@ -522,15 +587,14 @@ class MusicBot(commands.Cog):
             if len(self.music_queue) >= 0:
                 self.voice_channel.stop()
                 self.skiping = True
-                await self.play_music(0)
+                await self.play_music(0, context)
             else:
                 await context.send("Tem música o suficiente pra isso não. Da um queue antes aí.")
-
-    
+ 
     @commands.command()
     async def skipto(self, context, *args):
         """
-            !skipto: pula pra uma música específica
+            -skipto: pula pra uma música específica
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
             param args: argumentos passados após o comando
@@ -543,15 +607,14 @@ class MusicBot(commands.Cog):
             if len(self.music_queue) >= int(music_n):
                 self.voice_channel.stop()
                 self.skiping = True
-                await self.play_music(int(music_n) - 1)
+                await self.play_music(int(music_n) - 1, context)
             else:
                 await context.send("Tem música o suficiente pra isso não. Da um queue antes aí.")
 
-    
     @commands.command()
     async def pause(self, context):
         """
-            !pause: pausa a musica
+            -pause: pausa a musica
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
@@ -563,11 +626,10 @@ class MusicBot(commands.Cog):
             self.is_playing = False
             self.voice_source.is_source_paused = True
 
-
     @commands.command()
     async def resume(self, context):
         """
-            !resume: continua a musica pausada
+            -resume: continua a musica pausada
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
@@ -579,11 +641,10 @@ class MusicBot(commands.Cog):
             self.is_playing = True
             self.voice_source.is_source_paused = False
 
-
     @commands.command()
     async def dc(self, context):
         """
-            !dc: desconecta o bot da sala
+            -dc: desconecta o bot da sala
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
@@ -607,11 +668,10 @@ class MusicBot(commands.Cog):
             self.clean_all_configs()
             await context.voice_client.disconnect()
 
-
     @commands.command()
     async def lyrics(self, context, *args):
         """
-            !lyrics: mostra a letra da musica atual ou de uma especifica
+            -lyrics: mostra a letra da musica atual ou de uma especifica
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
             param args: argumentos passados após o comando
@@ -650,11 +710,10 @@ class MusicBot(commands.Cog):
         embed.set_author(name=music_artist)
         await context.send(embed=embed)
 
-
     @commands.command()
     async def clear(self, context):
         """
-            !clear: limpa a lista de musicas
+            -clear: limpa a lista de musicas
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
             param args: argumentos passados após o comando
@@ -677,12 +736,11 @@ class MusicBot(commands.Cog):
         else:
             self.music_queue = []
             await context.send("Lista de músicas nova em folha")
-
-    
+  
     @commands.command()
     async def remove(self, context, *args):
         """
-            !remove: mostra a letra da musica atual ou de uma especifica
+            -remove: mostra a letra da musica atual ou de uma especifica
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
             param args: argumentos passados após o comando
@@ -709,17 +767,16 @@ class MusicBot(commands.Cog):
 
             await context.send("Pronto. Foi pro lixo.")
 
-
     @commands.command()
     async def np(self, context):
         """
-            !np: musica tocando na hora
+            -np: musica tocando na hora
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
             param args: argumentos passados após o comando
         """
 
-        #precaução caso haja algum comando !np executado anteriormente e a música desse card ainda não acabou
+        #precaução caso haja algum comando -np executado anteriormente e a música desse card ainda não acabou
         #isso faz com que o loop desse card finalize, e a atualização do tempo decorrido da música pare
         self.voice_source.np_command = True
         self.np_is_running = False
@@ -736,7 +793,7 @@ class MusicBot(commands.Cog):
             music_artist = self.now_playing["artist"]
 
             requested_by = str(self.now_playing["requested_by"])
-            requested_by_display_name = self.now_playing["requested_by"].display_name
+            requested_by_display_name = self.now_playing["display_name"]
             requested_by_avatar_url = self.now_playing["requested_by"].avatar_url
 
             current_time = divmod(self.get_music_progress(), 60)
@@ -792,28 +849,3 @@ class MusicBot(commands.Cog):
 
                 await message.edit(embed=new_embed)
                 time.sleep(1)
-
-
-    # @commands.command()
-    # async def gabi(self, context):
-    #     """
-    #         !gabi: Mostra a Gabi cantando lindamente
-
-    #         param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
-    #     """
-
-    #     self.np_is_running = False
-
-    #     if not context.author.voice or context.author.voice.channel != context.voice_client.channel:
-    #         await context.send("Cê precisa ta num canal pra ouvir a GabiGod")
-    #         return
-
-    #     elif context.author.voice.channel and context.author.voice.channel == context.voice_client.channel:
-    #         await context.invoke(self.bot.get_command('p'), 'gabioini')
-    #         return
-
-    #     if not self.is_playing:
-    #         gabi_audio = musics.SourcePlaybackCounter(discord.FFmpegPCMAudio(self.gabi_oini["source"], **self.FFMPEG_OPTIONS), int(self.gabi_oini["video_duration"]))
-    #         self.voice_channel.play(
-    #             gabi_audio.voice_source
-    #         )
