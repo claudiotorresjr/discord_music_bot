@@ -167,7 +167,7 @@ class MusicBot(commands.Cog):
         #verifica se o bot foi marcado e manda uma resposta
         if self.bot.user.mentioned_in(message):
             await message.channel.send("Vo trabaiá hj não. Fica de boa aí")
-    """
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         
@@ -188,12 +188,12 @@ class MusicBot(commands.Cog):
                     time = 0
                     #se deu 120 segundos, ele sai do canal
                 if time == 120:
-                    await self.bot.get_channel(891471706038890536).send("Vão me deixar no vacuo? Vou embora então. Bai")
+                    await self.bot.get_channel(704020614314459176).send("Vão me deixar no vacuo? Vou embora então. Bai")
                     await voice.disconnect()
                     self.clean_all_configs()
                 if not voice.is_connected():
                     break
-    """
+
     def clean_all_configs(self):
         """
             Reseta todas as variáveis
