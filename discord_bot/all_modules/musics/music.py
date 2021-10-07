@@ -167,7 +167,7 @@ class MusicBot(commands.Cog):
         #verifica se o bot foi marcado e manda uma resposta
         if self.bot.user.mentioned_in(message):
             await message.channel.send("Vo trabaiá hj não. Fica de boa aí")
-
+    """
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         
@@ -193,7 +193,7 @@ class MusicBot(commands.Cog):
                     self.clean_all_configs()
                 if not voice.is_connected():
                     break
-
+    """
     def clean_all_configs(self):
         """
             Reseta todas as variáveis
