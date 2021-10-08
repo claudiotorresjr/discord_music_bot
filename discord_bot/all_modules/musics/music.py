@@ -76,7 +76,7 @@ class MusicBot(commands.Cog):
     music_channel_id = 704020614314459176
     geral_channel_id = 259108205798359040
 
-    rafa_id = 895097576024571944
+    rafa_id = 420210840663359489 #895097576024571944
 
 
     def __init__(self, bot):
