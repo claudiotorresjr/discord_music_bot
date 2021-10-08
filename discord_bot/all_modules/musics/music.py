@@ -175,7 +175,6 @@ class MusicBot(commands.Cog):
         if not member.id == self.bot.user.id:
             return
         
-        print("Bot entrou/saiu do canal de voz")
         #verifica se o canal anterior é None. Então o bot chegou limpinho
         elif before.channel is None:
             print("Bot canal anterior None")
