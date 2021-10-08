@@ -73,6 +73,11 @@ class MusicBot(commands.Cog):
 
     bot_request = False
 
+    music_channel_id = 704020614314459176
+    geral_channel_id = 259108205798359040
+
+    rafa_id = 895097576024571944
+
 
     def __init__(self, bot):
         """
@@ -133,6 +138,8 @@ class MusicBot(commands.Cog):
         self.GOOGLE_API_KEY = "AIzaSyAiWvkOhhsUpXZX4xHg6vArSxGrSkN1OZM"
         self.youtube_url = "https://www.youtube.com/watch?v="
 
+        self.who_is_in_voice = []
+
     def get_music_progress(self):
         if self.voice_source:
             return self.voice_source.music_progress
@@ -171,26 +178,58 @@ class MusicBot(commands.Cog):
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         
-        #verifica se é o bot que vez algo de diferente no canal de voz (acho que verifica só se entrou/saiu)
-        if not member.id == self.bot.user.id:
-            return
-        
+        #verifica se um user (nao o bot) entrou/saiu no canal de voz
+        if member.id != self.bot.user.id:
+            #se o bot já estiver em um canal de voz, verifica se o usuario entrou ou saiu
+            if self.voice_channel != "":
+                #se o usuário entrou, member.voice nao é None.
+                try:
+                    #se o id do canal do usuario for igual ao do bot, entao estao no mesmo canal
+                    if member.voice.channel.id == self.voice_channel_id:
+                        #adiciona o id desse user na lista de pessoas no canal de voz
+                        self.who_is_in_voice.append(member.id)
+
+                        if member.id == self.rafa_id:
+                            await self.bot.get_channel(self.music_channel_id).send("Ahh não. Chegou...")
+                        #print(f"{member.name} entrou")
+                #se foi exceptiom, member.voice é None. Então o user saiu do canal de voz
+                except Exception:
+                        #tenta remover o id do usuario da lista. é sucesso se o usuário estiver no mesmo
+                        #canal de voz do bot.
+                        try:
+                            #remove o id desse user na lista de pessoas no canal de voz
+                            self.who_is_in_voice.remove(member.id)
+                            if member.id == self.rafa_id:
+                                await self.bot.get_channel(self.music_channel_id).send("Graças a Deus a tortura acabou!")
+                            #print(f"{member.name} saiu")
+                        #a exception ocorre quando tenta tirar da lista e o id nao está la. Isso acontece se
+                        #o usuário entrou em um outro canal diferente que o bot ta.
+                        except Exception:
+                            pass
+
         #verifica se o canal anterior é None. Então o bot chegou limpinho
         elif before.channel is None:
-            print("Bot canal anterior None")
+            #print("Bot entrou no canal de voz")
             voice = after.channel.guild.voice_client
+
+            #assim que o bot entra, pega todos que estão no canal de voz atual
+            for user_id in voice.channel.voice_states.keys():
+                #se o rafa tiver no canal, o bot fica puto
+                if user_id == self.rafa_id:
+                    await self.bot.get_channel(self.music_channel_id).send("Vai mesmo me forçar entrar com ELE aí? Péssimo dia pra ser escravo musical.")
+                self.who_is_in_voice.append(user_id)
             time = 0
             #loop para ver se o bot ta tocando algo ou nao.
             while True:
                 await asyncio.sleep(1)
                 time = time + 1
+                print(time)
                 #se começar a tocar ou a musica for pausada, a contagem é reiniciada
                 if voice.is_playing() and not voice.is_paused():
                     time = 0
                     #se deu 120 segundos, ele sai do canal
                 if time == 120:
-                    print("Deu 2 min")
-                    await self.bot.get_channel(704020614314459176).send("Vão me deixar no vacuo? Vou embora então. Bai")
+                    await self.bot.get_channel(self.music_channel_id).send("Vão me deixar no vacuo? Vou embora então. Bai")
                     await voice.disconnect()
                     self.clean_all_configs()
                 if not voice.is_connected():
@@ -211,6 +250,7 @@ class MusicBot(commands.Cog):
         self.voice_channel_id = ""
         self.music_stop_counter = False
         self.voice_source = ""
+        self.who_is_in_voice = []
     
     def extract_url_from_playlist(self, url, context, voice_channel):
         #extract playlist id from url
@@ -363,6 +403,7 @@ class MusicBot(commands.Cog):
             #tenta conectar ao canal se ainda nao tiver conectado
             if self.voice_channel == "" or not self.voice_channel.is_connected():
                 self.voice_channel = await self.music_queue[music_n][1].connect()
+                time.sleep(0.5)
             else:
                 await self.voice_channel.move_to(self.music_queue[music_n][1])
 
