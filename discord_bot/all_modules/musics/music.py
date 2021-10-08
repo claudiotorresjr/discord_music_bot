@@ -174,9 +174,11 @@ class MusicBot(commands.Cog):
         #verifica se é o bot que vez algo de diferente no canal de voz (acho que verifica só se entrou/saiu)
         if not member.id == self.bot.user.id:
             return
-
+        
+        print("Bot entrou/saiu do canal de voz")
         #verifica se o canal anterior é None. Então o bot chegou limpinho
         elif before.channel is None:
+            print("Bot canal anterior None")
             voice = after.channel.guild.voice_client
             time = 0
             #loop para ver se o bot ta tocando algo ou nao.
@@ -188,6 +190,7 @@ class MusicBot(commands.Cog):
                     time = 0
                     #se deu 120 segundos, ele sai do canal
                 if time == 120:
+                    print("Deu 2 min")
                     await self.bot.get_channel(704020614314459176).send("Vão me deixar no vacuo? Vou embora então. Bai")
                     await voice.disconnect()
                     self.clean_all_configs()
