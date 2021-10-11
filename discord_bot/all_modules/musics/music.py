@@ -220,6 +220,7 @@ class MusicBot(commands.Cog):
                 self.who_is_in_voice.append(user_id)
             time = 0
             #loop para ver se o bot ta tocando algo ou nao.
+            """
             while True:
                 await asyncio.sleep(1)
                 time = time + 1
@@ -234,7 +235,7 @@ class MusicBot(commands.Cog):
                     self.clean_all_configs()
                 if not voice.is_connected():
                     break
-
+            """
     def clean_all_configs(self):
         """
             Reseta todas as variáveis
