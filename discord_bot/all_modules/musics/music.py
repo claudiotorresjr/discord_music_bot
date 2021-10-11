@@ -385,8 +385,7 @@ class MusicBot(commands.Cog):
 
             param music_n: índice da música escolhida para o skip (ou 0, caso seja a primeira)
         """
-        
-        self.is_playing = False
+
         if len(self.music_queue) > 0:
             self.np_is_running = False
             self.start_time = 0
