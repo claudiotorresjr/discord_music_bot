@@ -8,20 +8,20 @@ class Database:
     def connect(self):
         if self.conn is None:
             try:
-                self.conn = psycopg2.connect(
-                    database="d192h6q6nuqtvm", 
-                    user="qgxitkvldvufuq", 
-                    password="09a67a8ba28ae881bd1d2dbeb019ec4ea690f249601eafa1d0d5e63d1fb61013", 
-                    host="ec2-52-205-45-219.compute-1.amazonaws.com", 
-                    port="5432"
-                )
                 # self.conn = psycopg2.connect(
-                #     database="musicbot_test", 
-                #     user="postgres", 
-                #     password="123", 
-                #     host="127.0.0.1", 
+                #     database="d192h6q6nuqtvm", 
+                #     user="qgxitkvldvufuq", 
+                #     password="09a67a8ba28ae881bd1d2dbeb019ec4ea690f249601eafa1d0d5e63d1fb61013", 
+                #     host="ec2-52-205-45-219.compute-1.amazonaws.com", 
                 #     port="5432"
                 # )
+                self.conn = psycopg2.connect(
+                    database="musicbot_test", 
+                    user="postgres", 
+                    password="123", 
+                    host="127.0.0.1", 
+                    port="5432"
+                )
             except psycopg2.DatabaseError as e:
                 raise e
 

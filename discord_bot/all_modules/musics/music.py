@@ -499,7 +499,7 @@ class MusicBot(commands.Cog):
             if self.voice_channel == "" or voice_channel.id == self.voice_channel_id:
                 if self.voice_channel_id == "":
                     self.voice_channel_id = voice_channel.id
-                    #self.music_queue.append([self.gabi_oini, voice_channel])
+                    self.music_queue.append([self.gabi_oini, voice_channel])
 
                 #se tiver isso, provavelmente o individuo ta querendo uma playlist
                 if "playlist?list" in query:
@@ -805,7 +805,7 @@ class MusicBot(commands.Cog):
 
         self.np_is_running = False
 
-        music_n = int(" ".join(args))            
+        music_n = int(" ".join(args))
         if not context.author.voice:
             await context.send("Cê nem ta no canal. Quer excluir a música pq?")
             return
@@ -914,9 +914,13 @@ class MusicBot(commands.Cog):
 
         try:
             timestamp = datetime.datetime.utcnow().strftime('%d/%m/%Y - %H:%M')
+            if self.now_playing["title"] == "Gabi oini":
+                await context.send("Impossiboru salvar a músca da Gabier")
+                return
             music_info = {
                 self.now_playing["video_url"]: {"title": self.now_playing["title"], "timestamp": timestamp}
             }
+            await context.send(f"{self.now_playing['title']} salva na tua playlist :D")
         except Exception as e:
             await context.send("Tem música tocando não. Vou por na playlist como?")
         else:
@@ -1059,12 +1063,14 @@ class MusicBot(commands.Cog):
                 break
     
     @commands.command()
-    async def pp(self, context):
+    async def pp(self, context, *args):
         """
             -pp: adicionar a playlist do usuário na queue de música
 
             param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
         """
+
+        music_n = " ".join(args).split(',')
 
         playlist = self.database.select_rows_dict_cursor(
                         "SELECT PLAYLISTS FROM USERS WHERE USERID = '{}'".format(context.author.id), True)
@@ -1081,19 +1087,56 @@ class MusicBot(commands.Cog):
             return
 
         for musics in playlist[0]:
-            i = 0
+            i = 1
             for url, title in musics.items():
-                song = {
-                    "title": title["title"],
-                    "requested_by": context.author,
-                    "display_name": context.author.display_name,
-                    "video_url": url,
-                    "timestamp": datetime.datetime.utcnow(),
-                    "from_playlist": True
-                }
+                if str(i) in music_n:
+                    song = {
+                        "title": title["title"],
+                        "requested_by": context.author,
+                        "display_name": context.author.display_name,
+                        "video_url": url,
+                        "timestamp": datetime.datetime.utcnow(),
+                        "from_playlist": True
+                    }
 
-                self.music_queue.append([song, voice_channel])
+                    self.music_queue.append([song, voice_channel])
+
+                i += 1
 
         #se as musicas ja pararam, começa novamente
         if not self.is_playing:
             await self.play_music(0, context)
+
+    @commands.command()
+    async def rp(self, context, *args):
+        """
+            -rp: remove a música da playlist
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+            param args: argumentos passados após o comando
+        """
+
+        self.np_is_running = False
+
+        music_n = " ".join(args).split(',')
+
+        playlist = self.database.select_rows_dict_cursor(
+                        "SELECT PLAYLISTS FROM USERS WHERE USERID = '{}'".format(context.author.id), True)
+
+        if not bool(playlist):
+            await context.send("Parece que vc não criou uma playlist ainda... Ou eu a perdi :3")
+            return
+
+        update_playlist = {}
+        for musics in playlist[0]:
+            i = 1
+            for url, title in musics.items():
+                if str(i) not in music_n:
+                    update_playlist[url] = title
+                
+                i += 1
+
+        self.database.commit_query(
+            "UPDATE USERS SET PLAYLISTS = {} WHERE USERID = '{}'".format(
+                psycopg2.extras.Json(update_playlist), context.author.id)
+        )
