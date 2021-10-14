@@ -1,9 +1,13 @@
+from os import times
 import re
 import discord
 from discord.ext import commands
 import asyncio
 import datetime
 import time
+import json
+
+import psycopg2
 
 import youtube_dl
 import lyricsgenius as lg
@@ -11,8 +15,8 @@ import lyricsgenius as lg
 import googleapiclient.discovery
 from urllib.parse import parse_qs, urlparse
 
-#from discord_bot import all_modules
 from all_modules import musics
+from database import database as db
 
 
 class MusicBot(commands.Cog):
@@ -76,13 +80,18 @@ class MusicBot(commands.Cog):
     music_channel_id = 704020614314459176
     geral_channel_id = 259108205798359040
 
-    rafa_id = 895097576024571944
+    rafa_id = 214169823620366338
     #samurai 420210840663359489
 
     def __init__(self, bot):
         """
             __init__
         """
+
+        #cria o banco de dados.
+        self.database = db.Database()
+        self.database.connect()
+        self.database.create_table()
 
         self.bot = bot
 
@@ -206,34 +215,38 @@ class MusicBot(commands.Cog):
                         #o usuário entrou em um outro canal diferente que o bot ta.
                         except Exception:
                             pass
+            
+        else:
+            #verifica se o canal anterior é None. Então o bot chegou limpinho
+            if before.channel is None:
+                #print("Bot entrou no canal de voz")
+                voice = after.channel.guild.voice_client
 
-        #verifica se o canal anterior é None. Então o bot chegou limpinho
-        elif before.channel is None:
-            #print("Bot entrou no canal de voz")
-            voice = after.channel.guild.voice_client
+                #assim que o bot entra, pega todos que estão no canal de voz atual
+                for user_id in voice.channel.voice_states.keys():
+                    #se o rafa tiver no canal, o bot fica puto
+                    if user_id == self.rafa_id:
+                        await self.bot.get_channel(self.music_channel_id).send("Vai mesmo me forçar entrar com ELE aí? Péssimo dia pra ser escravo musical.")
+                    self.who_is_in_voice.append(user_id)
+                time = 0
+                #loop para ver se o bot ta tocando algo ou nao.
+                while True:
+                    await asyncio.sleep(1)
+                    time = time + 1
+                    #se começar a tocar ou a musica for pausada, a contagem é reiniciada
+                    if voice.is_playing() and not voice.is_paused():
+                        time = 0
+                        #se deu 120 segundos, ele sai do canal
+                    if time == 120:
+                        await self.bot.get_channel(self.music_channel_id).send("Vão me deixar no vacuo? Vou embora então. Bai")
+                        await voice.disconnect()
+                        self.clean_all_configs()
+                    if not voice.is_connected():
+                        break
 
-            #assim que o bot entra, pega todos que estão no canal de voz atual
-            for user_id in voice.channel.voice_states.keys():
-                #se o rafa tiver no canal, o bot fica puto
-                if user_id == self.rafa_id:
-                    await self.bot.get_channel(self.music_channel_id).send("Vai mesmo me forçar entrar com ELE aí? Péssimo dia pra ser escravo musical.")
-                self.who_is_in_voice.append(user_id)
-            time = 0
-            #loop para ver se o bot ta tocando algo ou nao.
-            while True:
-                await asyncio.sleep(1)
-                time = time + 1
-                print(time)
-                #se começar a tocar ou a musica for pausada, a contagem é reiniciada
-                if voice.is_playing() and not voice.is_paused():
-                    time = 0
-                    #se deu 120 segundos, ele sai do canal
-                if time == 120:
-                    await self.bot.get_channel(self.music_channel_id).send("Vão me deixar no vacuo? Vou embora então. Bai")
-                    await voice.disconnect()
-                    self.clean_all_configs()
-                if not voice.is_connected():
-                    break
+            elif after.channel is None:
+                #o bot saiu do canal por algum motivo. entao reseta todas as configs
+                self.clean_all_configs()
 
     def clean_all_configs(self):
         """
@@ -487,7 +500,7 @@ class MusicBot(commands.Cog):
             if self.voice_channel == "" or voice_channel.id == self.voice_channel_id:
                 if self.voice_channel_id == "":
                     self.voice_channel_id = voice_channel.id
-                    self.music_queue.append([self.gabi_oini, voice_channel])
+                    #self.music_queue.append([self.gabi_oini, voice_channel])
 
                 #se tiver isso, provavelmente o individuo ta querendo uma playlist
                 if "playlist?list" in query:
@@ -551,7 +564,8 @@ class MusicBot(commands.Cog):
                 all_music_pages.append(embed)
                 
                 embed = discord.Embed(
-                    title="Iremoví depois:"
+                    title="Iremoví depois:",
+                    description=f"Temo {len(self.music_queue)} músicas"
                 )
 
                 retval = "```"
@@ -893,3 +907,194 @@ class MusicBot(commands.Cog):
 
                 await message.edit(embed=new_embed)
                 time.sleep(1)
+
+    @commands.command()
+    async def s(self, context):
+        rows = self.database.select_rows_dict_cursor(
+            "SELECT * FROM USERS WHERE USERID = '{}'".format(context.author.id), True)
+
+        try:
+            timestamp = datetime.datetime.utcnow().strftime('%d/%m/%Y - %H:%M')
+            music_info = {
+                self.now_playing["video_url"]: {"title": self.now_playing["title"], "timestamp": timestamp}
+            }
+        except Exception as e:
+            await context.send("Tem música tocando não. Vou por na playlist como?")
+        else:
+            #usuário não tá no bd. insere o ID dele e a musica atual como a playlist
+            if not bool(rows):
+                self.database.commit_query(
+                    "INSERT INTO USERS (USERID, PLAYLISTS) VALUES \
+                        ('{}', {})".format(context.author.id, psycopg2.extras.Json(music_info))
+                )
+            else:
+                #pego as músicas já salvas e atualizo
+                playlist = self.database.select_rows_dict_cursor(
+                    "SELECT PLAYLISTS FROM USERS WHERE USERID = '{}'".format(context.author.id), True)
+                
+                update_playlist = {}
+                for musics in playlist[0]:
+                    for url, title in musics.items():
+                        update_playlist[url] = title
+
+                timestamp = datetime.datetime.utcnow().strftime('%d/%m/%Y - %H:%M')
+                update_playlist[self.now_playing["video_url"]] = {"title": self.now_playing["title"], "timestamp": timestamp}
+
+                self.database.commit_query(
+                    "UPDATE USERS SET PLAYLISTS = {} WHERE USERID = '{}'".format(
+                        psycopg2.extras.Json(update_playlist), context.author.id)
+                )
+
+    @commands.command()
+    async def mp(self, context):
+        """
+            -mypl: mostrar a lista de músicas da playlist do usuário
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+        """
+
+        playlist = self.database.select_rows_dict_cursor(
+                        "SELECT PLAYLISTS FROM USERS WHERE USERID = '{}'".format(context.author.id), True)
+
+        if not bool(playlist):
+            await context.send("Parece que vc não criou uma playlist ainda... Ou eu a perdi :3")
+            return
+
+        playlist_musics = []
+        for musics in playlist[0]:
+            for url, title in musics.items():
+                playlist_musics.append([title, url])
+
+        self.np_is_running = False
+
+        retval = "```"
+        all_music_pages = []
+        embed = discord.Embed(
+            title=f"Playlist de {context.author.display_name}",
+            description=f"Temo {len(playlist_musics)} músicas"
+        )
+        for musics in playlist[0]:
+            i = 0
+            for url, title in musics.items():
+                timestamp = title["timestamp"]
+                embed.add_field(
+                    name=f"{i + 1} - {title['title']}",
+                    value=f"Salva em: {timestamp}",
+                    inline=False)
+                
+                retval += f"{i} \n"
+            
+                #a cada 10 musicas, adiciona uma pagina de musicas
+                if (i+1) % 10 == 0 and i != 0:
+                    retval += "```"
+                    all_music_pages.append(embed)
+                    
+                    embed = discord.Embed(
+                        title=f"Playlist de {context.author.display_name}",
+                        description=f"Temo {len(playlist_musics)} músicas"
+                    )
+
+                    retval = "```"
+                
+                i += 1
+
+        retval += "```"
+        if "``````" in retval:
+            retval = ""
+        if retval != "":
+            all_music_pages.append(embed)
+        elif retval == "" and len(all_music_pages) == 0:
+            await context.send("Tem nada aqui irmão")
+            return
+
+        pages = len(all_music_pages)
+        cur_page = 1
+        prev_page = cur_page
+        message = await context.send(embed=all_music_pages[cur_page-1])
+        
+        #coloca as reações após as musicas
+        await message.add_reaction("⏮")
+        await message.add_reaction("◀️")
+        await message.add_reaction("▶️")
+        await message.add_reaction("⏭")
+
+        def check(reaction, user):
+            """
+                Ter a certeza de que somente as reações do usuário que chamou o comando serão processadas
+
+                param reaction: reação dada na mensagem
+                param user: usuário que reagiu
+            """
+
+            return user == context.author and str(reaction.emoji) in ["◀️", "▶️", "⏮", "⏭"]
+
+        while True:
+            try:
+                prev_page = cur_page
+                #espera por 20 segundos (timeout) até receber alguma reação. apaga a mensagem se nao houver
+                reaction, user = await self.bot.wait_for("reaction_add", timeout=20, check=check)
+
+                if str(reaction.emoji) == "▶️" and cur_page != pages:
+                    cur_page += 1
+                elif str(reaction.emoji) == "⏭" and cur_page != pages:
+                    cur_page = pages
+                elif str(reaction.emoji) == "◀️" and cur_page > 1:
+                    cur_page -= 1
+                elif str(reaction.emoji) == "⏮" and cur_page > 1:
+                    cur_page = 1
+                else:
+                    #remove reação se estiver na ultima/primeira posicao e a pessoa tentar forçar
+                    await message.remove_reaction(reaction, user)
+
+                #atualiza a página (mensagem)
+                if prev_page != cur_page:
+                   await message.edit(embed=all_music_pages[cur_page-1])
+                   await message.remove_reaction(reaction, user)
+
+            except asyncio.TimeoutError:
+                try:
+                    await message.delete()
+                except Exception:
+                    pass
+                #acaba com o loop após o timeout
+                break
+    
+    @commands.command()
+    async def pp(self, context):
+        """
+            -pp: adicionar a playlist do usuário na queue de música
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+        """
+
+        playlist = self.database.select_rows_dict_cursor(
+                        "SELECT PLAYLISTS FROM USERS WHERE USERID = '{}'".format(context.author.id), True)
+
+        if not bool(playlist):
+            await context.send("Parece que vc não criou uma playlist ainda... Ou eu a perdi :3")
+            return
+
+        #salva o canal que o usuario esta
+        try:
+            voice_channel = context.author.voice.channel
+        except AttributeError:
+            await context.send("Você precisa ta num canal, lerdão. Vai escutar como?")
+            return
+
+        for musics in playlist[0]:
+            i = 0
+            for url, title in musics.items():
+                song = {
+                    "title": title["title"],
+                    "requested_by": context.author,
+                    "display_name": context.author.display_name,
+                    "video_url": url,
+                    "timestamp": datetime.datetime.utcnow(),
+                    "from_playlist": True
+                }
+
+                self.music_queue.append([song, voice_channel])
+
+        #se as musicas ja pararam, começa novamente
+        if not self.is_playing:
+            await self.play_music(0, context)
