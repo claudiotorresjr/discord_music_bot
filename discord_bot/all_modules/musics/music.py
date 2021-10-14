@@ -451,21 +451,62 @@ class MusicBot(commands.Cog):
             colour=context.author.colour,
         )
 
-        embed.add_field(name='-help', value='Isso aqui que cê ta vendo')
-        embed.add_field(name='-p <nome da musica>', value='Escutar a musiquinha que vc quer. Por enquanto não funfa playlist :(')
-        embed.add_field(name='-q', value='Mostra as músicas que estão em espera na fila')
-        embed.add_field(name='-skip', value='Pula pra próxima música')
-        embed.add_field(name='-skipto <numero>', value='Pula pra música desejada')
-        embed.add_field(name='-pause', value='Pausa a música atual (a próxima que não é, né)')
-        embed.add_field(name='-resume', value='Retorna do pause (me obrigaram a não usar unpause)')
-        embed.add_field(name='-dc', value='Chuta o bot do canal')
-        embed.add_field(name='-lyrics', value='Mostra a letra da música atual (porcamente ainda)')
-        embed.add_field(name='-lyrics <nome da musica#artista>', value='Mostra a letra da música desejada (porcamente ainda)')
-        embed.add_field(name='-clear', value='Limpa a lista de músicas')
-        embed.add_field(name='-remove <musica>', value='Remove a música (passa o índice, não o nome, porfa')
-        embed.add_field(name='-np', value='Mostra a música atual')
-        embed.add_field(name='-gabi', value='Gabizy cantano maravilhosamente bem de bonito.')
-        embed.add_field(name='-veia', value='Abre o jogo da velha (os dois players precisam dar o comando)')
+        embed.add_field(
+            name='-help',
+            value='Isso aqui que cê ta vendo')
+        embed.add_field(
+            name='-p <nome da musica>',
+            value='Escutar a musiquinha que vc quer. Por enquanto não funfa playlist :(')
+        embed.add_field(
+            name='-q',
+            value='Mostra as músicas que estão em espera na fila')
+        embed.add_field(
+            name='-skip',
+            value='Pula pra próxima música')
+        embed.add_field(
+            name='-skipto <numero>',
+            value='Pula pra música desejada')
+        embed.add_field(
+            name='-pause',
+            value='Pausa a música atual (a próxima que não é, né)')
+        embed.add_field(
+            name='-resume',
+            value='Retorna do pause (me obrigaram a não usar unpause)')
+        embed.add_field(
+            name='-dc',
+            value='Chuta o bot do canal')
+        embed.add_field(
+            name='-lyrics',
+            value='Mostra a letra da música atual (porcamente ainda)')
+        embed.add_field(
+            name='-lyrics <nome da musica#artista>',
+            value='Mostra a letra da música desejada (porcamente ainda)')
+        embed.add_field(
+            name='-clear',
+            value='Limpa a lista de músicas')
+        embed.add_field(
+            name='-remove <musica>',
+            value='Remove a música (passa o índice, não o nome, porfa')
+        embed.add_field(
+            name='-np',
+            value='Mostra a música atual')
+        embed.add_field(
+            name='-s',
+            value='Salva a música atual na tua playlist.')
+        embed.add_field(
+            name='-mp',
+            value='Mostra tua playlist.')
+        embed.add_field(
+            name='-rp <numero>',
+            value='Remove música da playlist. O número pode ser único, ou vários separados por virgula. \
+            Exemplos:\n-rp 1 (remove a música de número 1)\n-rp 1,5,7 (remove as músicas de número 1, 5 e 7)')
+        embed.add_field(
+            name='-pp <numero>',
+            value='Coloca as músicas da playlist na queue de músicas. O número não é obrigatório e pode ser único ou vários separados por virgula. \
+            Exemplos:\n-pp (coloca todas as músicas na queue)\n-pp 1 (coloca a música de número 1 na queue)\n-pp 1,5,7 (coloca as músicas de número 1, 5 e 7 na queue)')
+        embed.add_field(
+            name='-veia',
+            value='Abre o jogo da velha (os dois players precisam dar o comando)')
     
         await context.send(embed=embed)
         self.np_is_running = False
