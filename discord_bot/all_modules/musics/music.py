@@ -1007,7 +1007,7 @@ class MusicBot(commands.Cog):
         if retval != "":
             all_music_pages.append(embed)
         elif retval == "" and len(all_music_pages) == 0:
-            await context.send("Tem nada aqui irmão")
+            await context.send("Parece que vc não criou uma playlist ainda... Ou eu a perdi :3")
             return
 
         pages = len(all_music_pages)
