@@ -1131,7 +1131,7 @@ class MusicBot(commands.Cog):
         for musics in playlist[0]:
             i = 1
             for url, title in musics.items():
-                if str(i) in music_n:
+                if str(i) in music_n or music_n[0] == "":
                     song = {
                         "title": title["title"],
                         "requested_by": context.author,
