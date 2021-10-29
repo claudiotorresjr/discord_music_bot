@@ -1,11 +1,10 @@
-from os import times
 import re
 import discord
 from discord.ext import commands
 import asyncio
 import datetime
 import time
-import json
+import random
 
 import psycopg2
 
@@ -99,6 +98,7 @@ class MusicBot(commands.Cog):
         self.music_atual_time = ""
         self.skiping = False
         self.music_queue = []
+        self.save_music_queue = []
 
         self.np_is_running = False
 
@@ -1182,3 +1182,64 @@ class MusicBot(commands.Cog):
             "UPDATE USERS SET PLAYLISTS = {} WHERE USERID = '{}'".format(
                 psycopg2.extras.Json(update_playlist), context.author.id)
         )
+
+    @commands.command()
+    async def shuffle(self, context):
+        """
+            -shuffle: randomiza as músicas na queue
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+        """
+
+        self.np_is_running = False
+
+        if not context.author.voice:
+            await context.send("Cê nem ta no canal. Vai mudar a queue não.")
+            return
+
+        if not context.voice_client:
+            await context.send("Não quero")
+            return
+
+        if context.author.voice.channel != context.voice_client.channel:
+            await context.send("Cê nem ta no canal. Vai mudar a queue não.")
+        else:
+            #verifica se está em algum canal de voz
+            if self.voice_channel != "":
+                #se tiver música na queue, salva a original e aplica um shuffle nela
+                if len(self.music_queue) > 0:
+                    self.save_music_queue = []
+                    self.save_music_queue = self.music_queue.copy()
+                    random.shuffle(self.music_queue)
+
+            await context.send("Pronto. Embaraiei tudo.")    
+
+    @commands.command()
+    async def original(self, context):
+        """
+            -original: randomiza as músicas na queue
+
+            param context: contexto enviado ao bot com informações do servidor, autor do comando, etc
+        """
+
+        self.np_is_running = False
+
+        if not context.author.voice:
+            await context.send("Cê nem ta no canal. Vai mudar a queue não.")
+            return
+
+        if not context.voice_client:
+            await context.send("Não quero")
+            return
+
+        if context.author.voice.channel != context.voice_client.channel:
+            await context.send("Cê nem ta no canal. Vai mudar a queue não.")
+        else:
+            #verifica se está em algum canal de voz
+            if self.voice_channel != "":
+                #se tiver música na queue, salva a original e aplica um shuffle nela
+                if len(self.music_queue) > 0:
+                    self.music_queue = []
+                    self.music_queue = self.save_music_queue.copy()
+
+            await context.send("Pronto. Desembaraiei tudo.")
